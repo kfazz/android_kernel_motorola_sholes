@@ -38,7 +38,7 @@
 
 /*
  * The polling frequency of this governor depends on the capability of
- * the processor. Default polling frequency is 1000 times the transition
+ * the processor. Default polling frequency is 1000 (Motorola Droid needs 100 - Tim Turner) times the transition
  * latency of the processor. The governor will work on any processor with
  * transition latency <= 10mS, using appropriate sampling
  * rate.
@@ -50,9 +50,13 @@
 
 static unsigned int min_sampling_rate;
 
-#define LATENCY_MULTIPLIER			(1000)
-#define MIN_LATENCY_MULTIPLIER			(100)
-#define TRANSITION_LATENCY_LIMIT		(10 * 1000 * 1000)
+/*
+ * I changed the LATENCY_MULTIPLIER from 1000 to 100 and MIN_LATENCY_MULTIPLIER to 10 from 100 
+ * to deal with OMAP 3430 CPU on Motorola Droid - (3/28/2011) Tim Turner <prime@reprime.net>
+ */
+#define LATENCY_MULTIPLIER			(100)
+#define MIN_LATENCY_MULTIPLIER			(10)
+#define TRANSITION_LATENCY_LIMIT		(10 * 100 * 1000)
 
 static void do_dbs_timer(struct work_struct *work);
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,

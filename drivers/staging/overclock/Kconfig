@@ -1,0 +1,16 @@
+config OVERCLOCK
+	tristate "From the Milestone Overclock Project (overclock)"
+
+	default m
+	help
+	This project consists of a kernel module for OMAP3 phones with Android 
+	to unlock any processor frequency/voltage combination and a companion 
+	graphical app to ease the configuration. The phone must be rooted so 
+	that the kernel module can be loaded.
+	
+	The module has an interface in /proc/overclock/* that allows enabling 
+	and disabling of overclock in runtime without rebooting. No flashing of 
+	custom roms or kernels is needed, since that is not even possible with 
+	the Milestone, Droid X and others.
+
+	  Project home: http://milestone-overclock.googlecode.com/
