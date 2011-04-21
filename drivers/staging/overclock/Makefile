@@ -1,4 +1,4 @@
-KERNEL_BUILD := /home/autobot/deprimed
+KERNEL_BUILD := ~/chameleon
 KERNEL_CROSS_COMPILE := arm-eabi-
 FILENAME := overclock
 

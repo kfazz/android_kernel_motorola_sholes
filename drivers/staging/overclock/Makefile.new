@@ -1,4 +1,0 @@
-overclock-objs := overclock.o
-
-obj-$(CONFIG_OVERCLOCK) += overclock.o
-
