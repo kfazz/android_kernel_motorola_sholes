@@ -1,7 +1,7 @@
 config OVERCLOCK
 	tristate "From the Milestone Overclock Project (overclock)"
 
-	default m
+	default n
 	help
 	This project consists of a kernel module for OMAP3 phones with Android 
 	to unlock any processor frequency/voltage combination and a companion 
