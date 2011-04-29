@@ -123,7 +123,7 @@
 	#endif
 #elif defined(CONFIG_SHOLES_OC_MIN_250)
 	#define SHOLES_FREQ_1 250000000
-        #define SHOLES_FREQ_2 400000000
+        #define SHOLES_FREQ_2 350000000
 	#if defined(CONFIG_SHOLES_OC_LV)
 		#define SHOLES_VSEL_1 0x20
                 #define SHOLES_VSEL_2 0x20
@@ -156,6 +156,68 @@
 	#endif
 #endif
 
+#if defined(CONFIG_SHOLES_OC_MAX_650)
+	#define SHOLES_FREQ_3  400000000
+	#define SHOLES_FREQ_4  500000000
+	#define SHOLES_FREQ_5  550000000
+	#define SHOLES_FREQ_6  60000000
+	#define SHOLES_FREQ_7  650000000
+	#if defined(CONFIG_SHOLES_OC_LV)
+		#define SHOLES_VSEL_3 0x28
+		#define SHOLES_VSEL_4 0x32
+		#define SHOLES_VSEL_5 0x32
+		#define SHOLES_VSEL_6 0x34
+		#define SHOLES_VSEL_7 0x36
+	#elif defined(CONFIG_SHOLES_OC_SV)
+		#define SHOLES_VSEL_3 0x32
+		#define SHOLES_VSEL_4 0x34
+		#define SHOLES_VSEL_5 0x34
+		#define SHOLES_VSEL_6 0x38
+		#define SHOLES_VSEL_7 0x3E
+	#elif defined(CONFIG_SHOLES_OC_IV)
+		#define SHOLES_VSEL_3 0x32
+		#define SHOLES_VSEL_4 0x36
+		#define SHOLES_VSEL_5 0x36
+		#define SHOLES_VSEL_6 0x38
+		#define SHOLES_VSEL_7 0x3E
+	#else
+		#define SHOLES_VSEL_3 0x28
+		#define SHOLES_VSEL_4 0x32
+		#define SHOLES_VSEL_5 0x34
+		#define SHOLES_VSEL_6 0x38
+		#define SHOLES_VSEL_7 0x3B
+	#endif
+#if defined(CONFIG_SHOLES_OC_MAX_700)
+	#define SHOLES_FREQ_3  400000000
+	#define SHOLES_FREQ_4  500000000
+	#define SHOLES_FREQ_5  550000000
+	#define SHOLES_FREQ_6  650000000
+	#define SHOLES_FREQ_7  700000000
+	#if defined(CONFIG_SHOLES_OC_LV)
+		#define SHOLES_VSEL_3 0x28
+		#define SHOLES_VSEL_4 0x32
+		#define SHOLES_VSEL_5 0x34
+		#define SHOLES_VSEL_6 0x36
+		#define SHOLES_VSEL_7 0x38
+	#elif defined(CONFIG_SHOLES_OC_SV)
+		#define SHOLES_VSEL_3 0x32
+		#define SHOLES_VSEL_4 0x36
+		#define SHOLES_VSEL_5 0x38
+		#define SHOLES_VSEL_6 0x3E
+		#define SHOLES_VSEL_7 0x3E
+	#elif defined(CONFIG_SHOLES_OC_IV)
+		#define SHOLES_VSEL_3 0x32
+		#define SHOLES_VSEL_4 0x36
+		#define SHOLES_VSEL_5 0x38
+		#define SHOLES_VSEL_6 0x3E
+		#define SHOLES_VSEL_7 0x4A
+	#else
+		#define SHOLES_VSEL_3 0x28
+		#define SHOLES_VSEL_4 0x32
+		#define SHOLES_VSEL_5 0x34
+		#define SHOLES_VSEL_6 0x38
+		#define SHOLES_VSEL_7 0x3B
+	#endif
 #if defined(CONFIG_SHOLES_OC_MAX_800)
 	#define SHOLES_FREQ_3  400000000
 	#define SHOLES_FREQ_4  550000000

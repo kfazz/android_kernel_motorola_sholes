@@ -154,6 +154,12 @@ choice
 	default SHOLES_OC_MAX_1000
 
 	config SHOLES_OC_MAX_800
+		bool "650 mhz"
+
+	config SHOLES_OC_MAX_800
+		bool "700 mhz"
+
+	config SHOLES_OC_MAX_800
 		bool "800 mhz"
 
 	config SHOLES_OC_MAX_900
