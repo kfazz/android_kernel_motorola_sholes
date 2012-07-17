@@ -1,6 +1,6 @@
 /**********************************************************************
  *
- * Copyright(c) 2008 Imagination Technologies Ltd. All rights reserved.
+ * Copyright (C) Imagination Technologies Ltd. All rights reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -24,12 +24,47 @@
  *
  ******************************************************************************/
 
-#if !defined(__SYSINFO_H__)
-#define __SYSINFO_H__
+#ifndef __PVR_UACCESS_H__
+#define __PVR_UACCESS_H__
 
-#define MAX_HW_TIME_US				(500000)
-#define WAIT_TRY_COUNT				(10000)
+#include <linux/version.h>
 
-#define SYS_DEVICE_COUNT 3 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+#ifndef AUTOCONF_INCLUDED
+#include <linux/config.h>
+#endif
+#endif
 
-#endif	
+#include <asm/uaccess.h>
+
+static inline unsigned long pvr_copy_to_user(void __user *pvTo, const void *pvFrom, unsigned long ulBytes)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+    if (access_ok(VERIFY_WRITE, pvTo, ulBytes))
+    {
+	return __copy_to_user(pvTo, pvFrom, ulBytes);
+    }
+    return ulBytes;
+#else
+    return copy_to_user(pvTo, pvFrom, ulBytes);
+#endif
+}
+
+static inline unsigned long pvr_copy_from_user(void *pvTo, const void __user *pvFrom, unsigned long ulBytes)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+    
+    if (access_ok(VERIFY_READ, pvFrom, ulBytes))
+    {
+	return __copy_from_user(pvTo, pvFrom, ulBytes);
+    }
+    return ulBytes;
+#else
+    return copy_from_user(pvTo, pvFrom, ulBytes);
+#endif
+}
+
+#define	pvr_put_user	put_user
+
+#endif 
+

@@ -1,6 +1,6 @@
 /**********************************************************************
  *
- * Copyright(c) 2008 Imagination Technologies Ltd. All rights reserved.
+ * Copyright (C) Imagination Technologies Ltd. All rights reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -22,35 +22,15 @@
  * Imagination Technologies Ltd. <gpl-support@imgtec.com>
  * Home Park Estate, Kings Langley, Herts, WD4 8LZ, UK 
  *
- ******************************************************************************/
+ *****************************************************************************/
 
-#if !defined(__SOCCONFIG_H__)
-#define __SOCCONFIG_H__
+#ifndef __IMG_LINUX_ION_H__
+#define __IMG_LINUX_ION_H__
 
-#include "syscommon.h"
+#include <linux/ion.h>
+#include <linux/omap_ion.h>
 
-#define VS_PRODUCT_NAME	"OMAP3430"
+struct ion_handle *PVRSRVExportFDToIONHandle(int fd,
+											 struct ion_client **client);
 
-#define SYS_SGX_CLOCK_SPEED	110666666
-#define SYS_SGX_HWRECOVERY_TIMEOUT_FREQ		(100)	
-#define SYS_SGX_PDS_TIMER_FREQ			(1000)	
-
-#if !defined(SYS_SGX_ACTIVE_POWER_LATENCY_MS)
-#define SYS_SGX_ACTIVE_POWER_LATENCY_MS		(1)
-#endif
-
-
-#define	SYS_OMAP3430_VDD2_OPP3_SGX_CLOCK_SPEED SYS_SGX_CLOCK_SPEED
-#define SYS_OMAP3430_VDD2_OPP2_SGX_CLOCK_SPEED (SYS_SGX_CLOCK_SPEED / 2)
-
-#define SYS_OMAP3430_SGX_REGS_SYS_PHYS_BASE  0x50000000
-#define SYS_OMAP3430_SGX_REGS_SIZE           0x4000
-
-#define SYS_OMAP3430_SGX_IRQ				 21
-
-#define SYS_OMAP3430_GP11TIMER_ENABLE_SYS_PHYS_BASE  0x48088024
-#define SYS_OMAP3430_GP11TIMER_REGS_SYS_PHYS_BASE	 0x48088028
-#define SYS_OMAP3430_GP11TIMER_TSICR_SYS_PHYS_BASE	 0x48088040
-
- 
-#endif	
+#endif /* __IMG_LINUX_ION_H__ */

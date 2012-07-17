@@ -1,39 +1,35 @@
 /**********************************************************************
  *
  * Copyright(c) 2008 Imagination Technologies Ltd. All rights reserved.
- * 
+ *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
  * version 2, as published by the Free Software Foundation.
- * 
- * This program is distributed in the hope it will be useful but, except 
- * as otherwise stated in writing, without any warranty; without even the 
- * implied warranty of merchantability or fitness for a particular purpose. 
+ *
+ * This program is distributed in the hope it will be useful but, except
+ * as otherwise stated in writing, without any warranty; without even the
+ * implied warranty of merchantability or fitness for a particular purpose.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along with
  * this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
- * 
+ *
  * The full GNU General Public License is included in this distribution in
  * the file called "COPYING".
  *
  * Contact Information:
  * Imagination Technologies Ltd. <gpl-support@imgtec.com>
- * Home Park Estate, Kings Langley, Herts, WD4 8LZ, UK 
+ * Home Park Estate, Kings Langley, Herts, WD4 8LZ, UK
  *
  ******************************************************************************/
-
-#include <asm/bug.h>
 
 #include <linux/version.h>
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/hardirq.h>
-#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <linux/semaphore.h>
-#include <plat/resource.h>
 #include <plat/omap-pm.h>
 
 #include "sgxdefs.h"
@@ -43,6 +39,10 @@
 #include "sysconfig.h"
 #include "sgxinfokm.h"
 #include "syslocal.h"
+
+#if !defined(PVR_LINUX_USING_WORKQUEUES)
+#error "PVR_LINUX_USING_WORKQUEUES must be defined"
+#endif
 
 #define	ONE_MHZ	1000000
 #define	HZ_TO_MHZ(m) ((m) / ONE_MHZ)
@@ -54,87 +54,56 @@
 #endif
 
 extern struct platform_device *gpsPVRLDMDev;
-
-static PVRSRV_ERROR ForceMaxSGXClocks(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	PVR_UNREFERENCED_PARAMETER(psSysSpecData);
-	/* pin the memory bus bw to the highest value */
-	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 400000);
-	return PVRSRV_OK;
-}
-
-#if !defined(PDUMP) && !defined(NO_HARDWARE)
-
-static IMG_BOOL PowerLockWrappedOnCPU(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	PVR_UNREFERENCED_PARAMETER(psSysSpecData);
-	return IMG_TRUE;
-}
-
+//#if defined(SGX530) && (SGX_CORE_REV == 125)
+#define OMAP_MEMORY_BUS_CLOCK_MAX 800000
+//#else
+//#define OMAP_MEMORY_BUS_CLOCK_MAX 664000  //otherwise sgx is happy enough at 107Mhz but we want 133!
+//#endif
 static IMG_VOID PowerLockWrap(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	BUG_ON(in_atomic());
-	mutex_lock(&psSysSpecData->sPowerLock);
+	if (!in_interrupt())
+	{
+		BUG_ON(in_atomic());
+		mutex_lock(&psSysSpecData->sPowerLock);
+	}
 }
 
 static IMG_VOID PowerLockUnwrap(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	BUG_ON(in_atomic());
-	mutex_unlock(&psSysSpecData->sPowerLock);
+	if (!in_interrupt())
+	{
+		BUG_ON(in_atomic());
+		mutex_unlock(&psSysSpecData->sPowerLock);
+	}
 }
 
-#else
-
-static IMG_BOOL PowerLockWrappedOnCPU(SYS_SPECIFIC_DATA *psSysSpecData)
+PVRSRV_ERROR SysPowerLockWrap(IMG_BOOL bTryLock)
 {
-	PVR_UNREFERENCED_PARAMETER(psSysSpecData);
-	return IMG_FALSE;
-}
+	SYS_DATA	*psSysData;
 
-static IMG_VOID PowerLockWrap(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	PVR_UNREFERENCED_PARAMETER(psSysSpecData);
-	
-}
+	SysAcquireData(&psSysData);
 
-static IMG_VOID PowerLockUnwrap(SYS_SPECIFIC_DATA *psSysSpecData)
-{
-	PVR_UNREFERENCED_PARAMETER(psSysSpecData);
-}
-
-#endif
-
-PVRSRV_ERROR SysPowerLockWrap(SYS_DATA *psSysData)
-{
-	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
-
-	PowerLockWrap(psSysSpecData);
+	PowerLockWrap(psSysData->pvSysSpecificData);
 
 	return PVRSRV_OK;
 }
 
-IMG_VOID SysPowerLockUnwrap(SYS_DATA *psSysData)
+IMG_VOID SysPowerLockUnwrap(IMG_VOID)
 {
-	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
+	SYS_DATA	*psSysData;
 
-	PowerLockUnwrap(psSysSpecData);
+	SysAcquireData(&psSysData);
+
+	PowerLockUnwrap(psSysData->pvSysSpecificData);
 }
 
 IMG_BOOL WrapSystemPowerChange(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	IMG_BOOL bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
-
-	if (bPowerLock)
-	{
-		PowerLockUnwrap(psSysSpecData);
-	}
-
-	return bPowerLock;
+	return IMG_TRUE;
 }
 
 IMG_VOID UnwrapSystemPowerChange(SYS_SPECIFIC_DATA *psSysSpecData)
 {
-	PowerLockWrap(psSysSpecData);
 }
 
 static inline IMG_UINT32 scale_by_rate(IMG_UINT32 val, IMG_UINT32 rate1, IMG_UINT32 rate2)
@@ -171,19 +140,21 @@ IMG_VOID SysGetSGXTimingInformation(SGX_TIMING_INFORMATION *psTimingInfo)
 #endif
 	psTimingInfo->ui32CoreClockSpeed = rate;
 	psTimingInfo->ui32HWRecoveryFreq = scale_prop_to_SGX_clock(SYS_SGX_HWRECOVERY_TIMEOUT_FREQ, rate);
-	psTimingInfo->ui32uKernelFreq = scale_prop_to_SGX_clock(SYS_SGX_PDS_TIMER_FREQ, rate); 
+	psTimingInfo->ui32uKernelFreq = scale_prop_to_SGX_clock(SYS_SGX_PDS_TIMER_FREQ, rate);
 #if defined(SUPPORT_ACTIVE_POWER_MANAGEMENT)
 	psTimingInfo->bEnableActivePM = IMG_TRUE;
-#else	
+#else
 	psTimingInfo->bEnableActivePM = IMG_FALSE;
 #endif
-	psTimingInfo->ui32ActivePowManLatencyms = SYS_SGX_ACTIVE_POWER_LATENCY_MS; 
+	psTimingInfo->ui32ActivePowManLatencyms = SYS_SGX_ACTIVE_POWER_LATENCY_MS;
 }
 
 PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 {
 #if !defined(NO_HARDWARE)
 	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
+	long lNewRate;
+	long lRate;
 	IMG_INT res;
 
 	if (atomic_read(&psSysSpecData->sSGXClocksEnabled) != 0)
@@ -195,7 +166,6 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 
 #if defined(DEBUG)
 	{
-		
 		IMG_UINT32 rate = clk_get_rate(psSysSpecData->psMPU_CK);
 		PVR_DPF((PVR_DBG_MESSAGE, "EnableSGXClocks: CPU Clock is %dMhz", HZ_TO_MHZ(rate)));
 	}
@@ -205,25 +175,49 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 	if (res < 0)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "EnableSGXClocks: Couldn't enable SGX functional clock (%d)", res));
-		return PVRSRV_ERROR_GENERIC;
+		return PVRSRV_ERROR_UNABLE_TO_ENABLE_CLOCK;
 	}
 
-	res = clk_enable(psSysSpecData->psSGX_ICK); 
+	res = clk_enable(psSysSpecData->psSGX_ICK);
 	if (res < 0)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "EnableSGXClocks: Couldn't enable SGX interface clock (%d)", res));
 
 		clk_disable(psSysSpecData->psSGX_FCK);
-		return PVRSRV_ERROR_GENERIC;
+		return PVRSRV_ERROR_UNABLE_TO_ENABLE_CLOCK;
 	}
 
-	ForceMaxSGXClocks(psSysSpecData);
+	lNewRate = clk_round_rate(psSysSpecData->psSGX_FCK, SYS_SGX_CLOCK_SPEED + ONE_MHZ);
+	if (lNewRate <= 0)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "EnableSGXClocks: Couldn't round SGX functional clock rate"));
+		return PVRSRV_ERROR_UNABLE_TO_ROUND_CLOCK_RATE;
+	}
+
+	lRate = clk_get_rate(psSysSpecData->psSGX_FCK);
+	if (lRate != lNewRate)
+	{
+		res = clk_set_rate(psSysSpecData->psSGX_FCK, lNewRate);
+		if (res < 0)
+		{
+			PVR_DPF((PVR_DBG_WARNING, "EnableSGXClocks: Couldn't set SGX functional clock rate (%d)", res));
+		}
+	}
+
+		IMG_UINT32 rate = clk_get_rate(psSysSpecData->psSGX_FCK); //Get the functional clock
+		printk(KERN_DEBUG "EnableSGXClocks: SGX Functional Clock is %dMhz", HZ_TO_MHZ(rate));
+
+
+#if defined(SYS_OMAP3430_PIN_MEMORY_BUS_CLOCK)
+	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, OMAP_MEMORY_BUS_CLOCK_MAX);
+#endif
+
 
 	atomic_set(&psSysSpecData->sSGXClocksEnabled, 1);
 
-#else
+#else	/* !defined(NO_HARDWARE) */
 	PVR_UNREFERENCED_PARAMETER(psSysData);
-#endif
+#endif	/* !defined(NO_HARDWARE) */
 	return PVRSRV_OK;
 }
 
@@ -232,9 +226,6 @@ IMG_VOID DisableSGXClocks(SYS_DATA *psSysData)
 {
 #if !defined(NO_HARDWARE)
 	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
-
-	/* unpin the memory bus */
-	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 0);
 
 	if (atomic_read(&psSysSpecData->sSGXClocksEnabled) == 0)
 	{
@@ -245,13 +236,17 @@ IMG_VOID DisableSGXClocks(SYS_DATA *psSysData)
 
 	if (psSysSpecData->psSGX_ICK)
 	{
-		clk_disable(psSysSpecData->psSGX_ICK); 
+		clk_disable(psSysSpecData->psSGX_ICK);
 	}
 
 	if (psSysSpecData->psSGX_FCK)
 	{
 		clk_disable(psSysSpecData->psSGX_FCK);
 	}
+
+#if defined(SYS_OMAP3430_PIN_MEMORY_BUS_CLOCK)
+	omap_pm_set_min_bus_tput(&gpsPVRLDMDev->dev, OCP_INITIATOR_AGENT, 0);
+#endif
 
 	atomic_set(&psSysSpecData->sSGXClocksEnabled, 0);
 
@@ -266,7 +261,6 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	struct clk *psCLK;
 	IMG_INT res;
 	PVRSRV_ERROR eError;
-	IMG_BOOL bPowerLock;
 
 #if defined(DEBUG) || defined(TIMING)
 	IMG_INT rate;
@@ -281,11 +275,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 
 	if (!psSysSpecData->bSysClocksOneTimeInit)
 	{
-		bPowerLock = IMG_FALSE;
-
 		mutex_init(&psSysSpecData->sPowerLock);
-		spin_lock_init(&psSysSpecData->sNotifyLock);
-		atomic_set(&psSysSpecData->sNotifyLockCPU, -1);
 
 		atomic_set(&psSysSpecData->sSGXClocksEnabled, 0);
 
@@ -328,19 +318,12 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 			PVR_DPF((PVR_DBG_ERROR, "EnableSystemClocks: Couldn't set SGX parent clock (%d)", res));
 			goto ExitError;
 		}
-	
+
 		psSysSpecData->bSysClocksOneTimeInit = IMG_TRUE;
-	}
-	else
-	{
-		bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
-		if (bPowerLock)
-		{
-			PowerLockUnwrap(psSysSpecData);
-		}
 	}
 
 #if defined(DEBUG) || defined(TIMING)
+
 	psCLK = clk_get(NULL, "gpt11_fck");
 	if (IS_ERR(psCLK))
 	{
@@ -348,7 +331,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 		goto ExitUnRegisterConstraintNotifications;
 	}
 	psSysSpecData->psGPT11_FCK = psCLK;
-	
+
 	psCLK = clk_get(NULL, "gpt11_ick");
 	if (IS_ERR(psCLK))
 	{
@@ -377,7 +360,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 
 	rate = clk_get_rate(psSysSpecData->psGPT11_FCK);
 	PVR_TRACE(("GPTIMER11 clock is %dMHz", HZ_TO_MHZ(rate)));
-	
+
 	res = clk_enable(psSysSpecData->psGPT11_FCK);
 	if (res < 0)
 	{
@@ -391,7 +374,8 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 		PVR_DPF((PVR_DBG_ERROR, "EnableSystemClocks: Couldn't enable GPTIMER11 interface clock (%d)", res));
 		goto ExitDisableGPT11FCK;
 	}
-	
+
+
 	TimerRegPhysBase.uiAddr = SYS_OMAP3430_GP11TIMER_TSICR_SYS_PHYS_BASE;
 	pui32TimerEnable = OSMapPhysToLin(TimerRegPhysBase,
                   4,
@@ -408,7 +392,8 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 	if(!(rate & 4))
 	{
 		PVR_TRACE(("Setting GPTIMER11 mode to posted (currently is non-posted)"));
-		
+
+
 		*pui32TimerEnable = rate | 4;
 	}
 
@@ -416,6 +401,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 		    4,
 		    PVRSRV_HAP_KERNEL_ONLY|PVRSRV_HAP_UNCACHED,
 		    hTimerEnable);
+
 
 	TimerRegPhysBase.uiAddr = SYS_OMAP3430_GP11TIMER_ENABLE_SYS_PHYS_BASE;
 	pui32TimerEnable = OSMapPhysToLin(TimerRegPhysBase,
@@ -428,6 +414,7 @@ PVRSRV_ERROR EnableSystemClocks(SYS_DATA *psSysData)
 		PVR_DPF((PVR_DBG_ERROR, "EnableSystemClocks: OSMapPhysToLin failed"));
 		goto ExitDisableGPT11ICK;
 	}
+
 
 	*pui32TimerEnable = 3;
 
@@ -449,27 +436,15 @@ ExitDisableGPT11FCK:
 ExitUnRegisterConstraintNotifications:
 #endif
 ExitError:
-	eError = PVRSRV_ERROR_GENERIC;
+	eError = PVRSRV_ERROR_DISABLE_CLOCK_FAILURE;
 Exit:
-	if (bPowerLock)
-	{
-		PowerLockWrap(psSysSpecData);
-	}
-
-#if !defined(SUPPORT_ACTIVE_POWER_MANAGEMENT)
-	if (eError == PVRSRV_OK)
-	{
-		eError = EnableSGXClocks(psSysData);
-	}
-#endif
 	return eError;
 }
 
 IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 {
-	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
-	IMG_BOOL bPowerLock;
 #if defined(DEBUG) || defined(TIMING)
+	SYS_SPECIFIC_DATA *psSysSpecData = (SYS_SPECIFIC_DATA *) psSysData->pvSysSpecificData;
 	IMG_CPU_PHYADDR TimerRegPhysBase;
 	IMG_HANDLE hTimerDisable;
 	IMG_UINT32 *pui32TimerDisable;
@@ -477,21 +452,17 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 
 	PVR_TRACE(("DisableSystemClocks: Disabling System Clocks"));
 
+
 	DisableSGXClocks(psSysData);
 
-	bPowerLock = PowerLockWrappedOnCPU(psSysSpecData);
-	if (bPowerLock)
-	{
-		PowerLockUnwrap(psSysSpecData);
-	}
-
 #if defined(DEBUG) || defined(TIMING)
+
 	TimerRegPhysBase.uiAddr = SYS_OMAP3430_GP11TIMER_ENABLE_SYS_PHYS_BASE;
 	pui32TimerDisable = OSMapPhysToLin(TimerRegPhysBase,
 				4,
 				PVRSRV_HAP_KERNEL_ONLY|PVRSRV_HAP_UNCACHED,
 				&hTimerDisable);
-	
+
 	if (pui32TimerDisable == IMG_NULL)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "DisableSystemClocks: OSMapPhysToLin failed"));
@@ -499,7 +470,7 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	else
 	{
 		*pui32TimerDisable = 0;
-		
+
 		OSUnMapPhysToLin(pui32TimerDisable,
 				4,
 				PVRSRV_HAP_KERNEL_ONLY|PVRSRV_HAP_UNCACHED,
@@ -511,8 +482,4 @@ IMG_VOID DisableSystemClocks(SYS_DATA *psSysData)
 	clk_disable(psSysSpecData->psGPT11_FCK);
 
 #endif
-	if (bPowerLock)
-	{
-		PowerLockWrap(psSysSpecData);
-	}
 }
