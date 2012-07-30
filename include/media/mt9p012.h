@@ -31,7 +31,7 @@ struct mt9p012_platform_data {
 	int (*power_set)(struct device* dev, enum v4l2_power power);
 	u32 (*set_xclk)(u32 xclkfreq);
 	int (*priv_data_set)(void *);
-#else	
+#else
 	int (*power_set)(struct device*, enum v4l2_power power);
 	int (*ifparm)(struct v4l2_ifparm *p);
 	int (*priv_data_set)(void *);

@@ -36,6 +36,8 @@
 #include <sound/soc-dapm.h>
 #include <sound/initval.h>
 
+#define DEBUG
+
 static DEFINE_MUTEX(pcm_mutex);
 static DEFINE_MUTEX(io_mutex);
 static DECLARE_WAIT_QUEUE_HEAD(soc_pm_waitq);
@@ -258,11 +260,11 @@ static int soc_pcm_open(struct snd_pcm_substream *substream)
 			goto machine_err;
 	}
 
-	pr_debug("asoc: %s <-> %s info:\n", codec_dai->name, cpu_dai->name);
-	pr_debug("asoc: rate mask 0x%x\n", runtime->hw.rates);
-	pr_debug("asoc: min ch %d max ch %d\n", runtime->hw.channels_min,
+	pr_info("asoc: %s <-> %s info:\n", codec_dai->name, cpu_dai->name);
+	pr_info("asoc: rate mask 0x%x\n", runtime->hw.rates);
+	pr_info("asoc: min ch %d max ch %d\n", runtime->hw.channels_min,
 		 runtime->hw.channels_max);
-	pr_debug("asoc: min rate %d max rate %d\n", runtime->hw.rate_min,
+	pr_info("asoc: min rate %d max rate %d\n", runtime->hw.rate_min,
 		 runtime->hw.rate_max);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -308,7 +310,7 @@ static void close_delayed_work(struct work_struct *work)
 	for (i = 0; i < codec->num_dai; i++) {
 		codec_dai = &codec->dai[i];
 
-		pr_debug("pop wq checking: %s status: %s waiting: %s\n",
+		pr_info("pop wq checking: %s status: %s waiting: %s\n",
 			 codec_dai->playback.stream_name,
 			 codec_dai->playback.active ? "active" : "inactive",
 			 codec_dai->pop_wait ? "yes" : "no");
@@ -981,6 +983,11 @@ static int soc_probe(struct platform_device *pdev)
 	int ret = 0;
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_card *card = socdev->card;
+	printk("soc_probe called\n");
+	
+	/* no card, so machine driver is registering card */
+	//if (!card)
+	//	return 0;
 
 	/* Bodge while we push things out of socdev */
 	card->socdev = socdev;
@@ -1635,6 +1642,7 @@ int snd_soc_add_controls(struct snd_soc_codec *codec,
 	int err, i;
 
 	for (i = 0; i < num_controls; i++) {
+		printk("adding control %d \n", i);
 		const struct snd_kcontrol_new *control = &controls[i];
 		err = snd_ctl_add(card, snd_soc_cnew(control, codec, NULL));
 		if (err < 0) {
@@ -2301,9 +2309,11 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_digital_mute);
  */
 static int snd_soc_register_card(struct snd_soc_card *card)
 {
-	if (!card->name || !card->dev)
-		return -EINVAL;
-
+	printk("snd_soc_register_card entered \n");
+	if (!card->name || !card->dev) {
+		printk("no name/dev \n");
+		return -EINVAL; }
+	
 	INIT_LIST_HEAD(&card->list);
 	card->instantiated = 0;
 
@@ -2361,7 +2371,7 @@ int snd_soc_register_dai(struct snd_soc_dai *dai)
 	snd_soc_instantiate_cards();
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Registered DAI '%s'\n", dai->name);
+	pr_info("Registered DAI '%s'\n", dai->name);
 
 	return 0;
 }
@@ -2378,7 +2388,7 @@ void snd_soc_unregister_dai(struct snd_soc_dai *dai)
 	list_del(&dai->list);
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Unregistered DAI '%s'\n", dai->name);
+	pr_info("Unregistered DAI '%s'\n", dai->name);
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_dai);
 
@@ -2394,8 +2404,9 @@ int snd_soc_register_dais(struct snd_soc_dai *dai, size_t count)
 
 	for (i = 0; i < count; i++) {
 		ret = snd_soc_register_dai(&dai[i]);
-		if (ret != 0)
-			goto err;
+		if (ret != 0) {
+			printk ("error, unregistering dais");
+			goto err; }
 	}
 
 	return 0;
@@ -2440,7 +2451,7 @@ int snd_soc_register_platform(struct snd_soc_platform *platform)
 	snd_soc_instantiate_cards();
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Registered platform '%s'\n", platform->name);
+	pr_info("Registered platform '%s'\n", platform->name);
 
 	return 0;
 }
@@ -2457,7 +2468,7 @@ void snd_soc_unregister_platform(struct snd_soc_platform *platform)
 	list_del(&platform->list);
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Unregistered platform '%s'\n", platform->name);
+	pr_info("Unregistered platform '%s'\n", platform->name);
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_platform);
 
@@ -2522,7 +2533,7 @@ int snd_soc_register_codec(struct snd_soc_codec *codec)
 	snd_soc_instantiate_cards();
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Registered codec '%s'\n", codec->name);
+	pr_info("Registered codec '%s'\n", codec->name);
 
 	return 0;
 }
@@ -2539,7 +2550,7 @@ void snd_soc_unregister_codec(struct snd_soc_codec *codec)
 	list_del(&codec->list);
 	mutex_unlock(&client_mutex);
 
-	pr_debug("Unregistered codec '%s'\n", codec->name);
+	pr_info("Unregistered codec '%s'\n", codec->name);
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_codec);
 

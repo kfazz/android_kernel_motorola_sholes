@@ -41,10 +41,10 @@
 static struct omap_video_timings sholes_panel_timings = {
 	.x_res		= 480,
 	.y_res		= 854,
-	.hfp		= 44,
+	.hfp		= 0,
 	.hsw		= 2,
-	.hbp		= 38,
-	.vfp		= 1,
+	.hbp		= 2,
+	.vfp		= 0,
 	.vsw		= 1,
 	.vbp		= 1,
 	.w		= 46,

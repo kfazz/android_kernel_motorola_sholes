@@ -99,3 +99,10 @@ config SND_OMAP_SOC_ZOOM2
 	help
 	  Say Y if you want to add support for Soc audio on Zoom2 board.
 
+config SND_OMAP_SOC_MOTSND
+	tristate "SoC Audio support for Motorola Android Platform"
+	depends on SND_OMAP_SOC && MACH_SHOLES
+	select SND_OMAP_SOC_MCBSP
+	help
+	  Say Y if building Motorola Android Platform
+

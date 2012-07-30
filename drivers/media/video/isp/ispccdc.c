@@ -38,7 +38,8 @@ static unsigned long fpc_table_add_m;
 /**
  * struct isp_ccdc - Structure for the CCDC module to store its own information
  * @ccdc_inuse: Flag to determine if CCDC has been reserved or not (0 or 1).
- * @ccdcout_w: CCDC output width.
+ * @ccdcout_w: CCDC output width (with padding).
+ * @ccdcout_w_img: CCDC output width (no padding).
  * @ccdcout_h: CCDC output height.
  * @ccdcin_w: CCDC input width.
  * @ccdcin_h: CCDC input height.
@@ -68,6 +69,7 @@ struct lsc_table {
 static struct isp_ccdc {
 	u8 ccdc_inuse;
 	u32 ccdcout_w;
+	u32 ccdcout_w_img;
 	u32 ccdcout_h;
 	u32 ccdcin_w;
 	u32 ccdcin_h;
@@ -89,6 +91,7 @@ static struct isp_ccdc {
 	u8 pm_state;
 	struct mutex mutexlock; /* For checking/modifying ccdc_inuse */
 	u32 wenlog;
+	u32 dcsub;
 	enum ispccdc_raw_fmt raw_fmt_in;
 
 	/* LSC related fields */
@@ -303,14 +306,15 @@ int omap34xx_isp_ccdc_config(void *userspace_add)
 
 	if (ISP_ABS_TBL_LSC & ccdc_struct->update) {
 		void *n;
-		if (ispccdc_obj.lsc_table_new.size < ispccdc_obj.lsc_config.size ||
+		if (ispccdc_obj.lsc_table_new.size <
+			ispccdc_obj.lsc_config.size ||
 			ispccdc_obj.lsc_table_new.addr == PTR_FREE) {
 			if (ispccdc_obj.lsc_table_new.addr != PTR_FREE) {
 				ispmmu_vfree(ispccdc_obj.lsc_table_new.addr);
 				ispccdc_obj.lsc_table_new.size = 0;
 			}
 			ispccdc_obj.lsc_table_new.addr =
-					ispmmu_vmalloc(ispccdc_obj.lsc_config.size);
+				ispmmu_vmalloc(ispccdc_obj.lsc_config.size);
 			if (IS_ERR_VALUE(ispccdc_obj.lsc_table_new.addr)) {
 				/* Disable LSC if table can not be allocated */
 				ispccdc_obj.lsc_table_new.addr = PTR_FREE;
@@ -318,7 +322,8 @@ int omap34xx_isp_ccdc_config(void *userspace_add)
 				ret = -ENOMEM;
 				goto out;
 			}
-			ispccdc_obj.lsc_table_new.size = ispccdc_obj.lsc_config.size;
+			ispccdc_obj.lsc_table_new.size =
+				ispccdc_obj.lsc_config.size;
 		}
 		n = ispmmu_da_to_va(ispccdc_obj.lsc_table_new.addr);
 		if (copy_from_user(n, ccdc_struct->lsc,
@@ -329,10 +334,21 @@ int omap34xx_isp_ccdc_config(void *userspace_add)
 		ispccdc_obj.update_lsc_table = 1;
 	}
 
+	if (ISP_ABS_CCDC_DCSUB & ccdc_struct->flag) {
+		if (ISP_ABS_CCDC_DCSUB & ccdc_struct->update) {
+			if (ccdc_struct->dcsub != ispccdc_obj.dcsub) {
+				ispccdc_obj.dcsub = ccdc_struct->dcsub;
+				isp_reg_writel(ispccdc_obj.dcsub,
+						OMAP3_ISP_IOMEM_CCDC,
+						ISPCCDC_DCSUB);
+			}
+		} else
+			ccdc_struct->dcsub = ispccdc_obj.dcsub;
+	}
+
 	if (ispccdc_obj.update_lsc_config) {
-		if (ispccdc_obj.pm_state == 0) {
+		if (ispccdc_obj.pm_state == 0)
 			ispccdc_setup_lsc();
-		}
 	}
 
 	if (ISP_ABS_CCDC_COLPTN & ccdc_struct->update)
@@ -361,6 +377,16 @@ void ispccdc_set_wenlog(u32 wenlog)
 	ispccdc_obj.wenlog = wenlog;
 }
 EXPORT_SYMBOL(ispccdc_set_wenlog);
+
+/**
+ * Set the value to be used for ISPCCDC_DCSUB.
+ *  dcsub - Value of black level.
+ */
+void ispccdc_set_dcsub(u32 dcsub)
+{
+	ispccdc_obj.dcsub = dcsub;
+}
+EXPORT_SYMBOL(ispccdc_set_dcsub);
 
 /**
  * ispccdc_set_raw_offset - Store the component order as component offset.
@@ -553,8 +579,6 @@ static void ispccdc_config_lsc(void)
 
 void ispccdc_lsc_state_handler(unsigned long status)
 {
-	unsigned long flags = 0;
-
 	switch (status) {
 	case LSC_DONE:
 		/* The only thing we update in config
@@ -567,7 +591,8 @@ void ispccdc_lsc_state_handler(unsigned long status)
 		/* If we have LSC prefetch error LSC enigne is block
 		 * and only way it can recover is sw reset of isp */
 		ispccdc_enable_lsc(0);
-		ispccdc_obj.lsc_request_enable = 1;
+		if (ispccdc_obj.lsc_request_enable == -1)
+			ispccdc_obj.lsc_request_enable = 1;
 	case LSC_PRE_COMP:
 		ispccdc_lsc_pref_comp_handler();
 		break;
@@ -600,9 +625,11 @@ void ispccdc_enable_lsc(u8 enable)
 		isp_reg_and(OMAP3_ISP_IOMEM_CCDC,
 			    ISPCCDC_LSC_CONFIG, ~ISPCCDC_LSC_ENABLE);
 
+		/*
 		isp_reg_and(OMAP3_ISP_IOMEM_MAIN,
 			   ISP_CTRL, ~(ISPCTRL_SBL_SHARED_RPORTB
 			   | ISPCTRL_SBL_RD_RAM_EN));
+		*/
 
 		isp_reg_and(OMAP3_ISP_IOMEM_MAIN, ISP_IRQ0ENABLE,
 			    ~(IRQ0ENABLE_CCDC_LSC_PREF_ERR_IRQ |
@@ -827,7 +854,7 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 		syncif.vdpol = 0;
 		ispccdc_config_sync_if(syncif);
 		ispccdc_config_imgattr(colptn);
-		blkcfg.dcsubval = 42;
+		blkcfg.dcsubval = ispccdc_obj.dcsub;
 		ispccdc_config_black_clamp(blkcfg);
 		break;
 	case CCDC_YUV_SYNC:
@@ -840,7 +867,7 @@ int ispccdc_config_datapath(enum ccdc_input input, enum ccdc_output output)
 		syncif.fldstat = 0;
 		syncif.hdpol = 0;
 		syncif.ipmod = YUV16;
-		syncif.vdpol = 1;
+		syncif.vdpol = 0;
 		ispccdc_config_imgattr(0);
 		ispccdc_config_sync_if(syncif);
 		blkcfg.dcsubval = 0;
@@ -1348,14 +1375,21 @@ int ispccdc_try_size(u32 input_w, u32 input_h, u32 *output_w, u32 *output_h)
 		*output_w &= 0xFFFFFFFE;
 	}
 
-	if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_MEM
-		|| ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP_MEM
+	/* Store actual image width, before byte padding for 32 pixel
+	   alignment */
+	ispccdc_obj.ccdcout_w_img = *output_w;
+
+	if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_MEM) {
+		if (*output_w % 16) {
+			*output_w -= (*output_w % 16);
+			*output_w += 16;
+		}
+	} else if (ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP_MEM
 		|| ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP_MEM_LSC) {
 		if (*output_w % 32) {
 			*output_w -= (*output_w % 32);
 			*output_w += 32;
 		}
-		*output_h &= 0xFFFFFFFE;
 	}
 
 	ispccdc_obj.ccdcout_w = *output_w;
@@ -1363,11 +1397,13 @@ int ispccdc_try_size(u32 input_w, u32 input_h, u32 *output_w, u32 *output_h)
 	ispccdc_obj.ccdcin_w = input_w;
 	ispccdc_obj.ccdcin_h = input_h;
 
-	DPRINTK_ISPCCDC("try size: ccdcin_w=%u,ccdcin_h=%u,ccdcout_w=%u,"
-			" ccdcout_h=%u\n",
+	DPRINTK_ISPCCDC("try size: ccdcin_w=%u,ccdcin_h=%u,"
+			"ccdcout_w=%u,ccdcout_w_img=%u,"
+			"ccdcout_h=%u\n",
 			ispccdc_obj.ccdcin_w,
 			ispccdc_obj.ccdcin_h,
 			ispccdc_obj.ccdcout_w,
+			ispccdc_obj.ccdcout_w_img,
 			ispccdc_obj.ccdcout_h);
 
 	return 0;
@@ -1419,7 +1455,8 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 		ISPCCDC_FMT_VERT);
 
 	if (fmtcfg_val & ISPCCDC_FMTCFG_VPEN) {
-		/* Formatting applied by ISPCCDC_FMT_HORZ, ISPCCDC_FMT_VERT, VP */
+		/* Formatting applied by ISPCCDC_FMT_HORZ, */
+		/* ISPCCDC_FMT_VERT, VP */
 		isp_reg_writel(0 << ISPCCDC_VERT_START_SLV0_SHIFT,
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_VERT_START);
@@ -1429,7 +1466,7 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 			ISPCCDC_VERT_LINES);
 		isp_reg_writel((0
 			<< ISPCCDC_HORZ_INFO_SPH_SHIFT) |
-			((ispccdc_obj.ccdcout_w - 1) <<
+			((ispccdc_obj.ccdcout_w_img - 1) <<
 			ISPCCDC_HORZ_INFO_NPH_SHIFT),
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_HORZ_INFO);
@@ -1438,20 +1475,20 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 			<< ISPCCDC_VERT_START_SLV0_SHIFT,
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_VERT_START);
-		isp_reg_writel((ispccdc_obj.ccdcout_h - ispccdc_obj.ccdcin_hoffset - 1) <<
+		isp_reg_writel((ispccdc_obj.ccdcout_h - 1) <<
 			ISPCCDC_VERT_LINES_NLV_SHIFT,
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_VERT_LINES);
 		isp_reg_writel((ispccdc_obj.ccdcin_woffset
 			<< ISPCCDC_HORZ_INFO_SPH_SHIFT) |
-			((ispccdc_obj.ccdcout_w - ispccdc_obj.ccdcin_woffset) <<
+			((ispccdc_obj.ccdcout_w_img - 1) <<
 			ISPCCDC_HORZ_INFO_NPH_SHIFT),
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_HORZ_INFO);
 	}
 
 	ispccdc_config_outlineoffset(ispccdc_obj.ccdcout_w * 2, 0, 0);
-	isp_reg_writel((((ispccdc_obj.ccdcout_h - 2) &
+	isp_reg_writel((((ispccdc_obj.ccdcout_h - 4) &
 			 ISPCCDC_VDINT_0_MASK) <<
 			ISPCCDC_VDINT_0_SHIFT) |
 		       ((50 & ISPCCDC_VDINT_1_MASK) <<
@@ -1463,18 +1500,16 @@ int ispccdc_config_size(u32 input_w, u32 input_h, u32 output_w, u32 output_h)
 		isp_reg_writel(0, OMAP3_ISP_IOMEM_CCDC, ISPCCDC_VP_OUT);
 	} else if ((ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP) ||
 		(ispccdc_obj.ccdc_outfmt == CCDC_OTHERS_VP_MEM_LSC)) {
-		isp_reg_writel((ispccdc_obj.ccdcout_w
+		isp_reg_writel((ispccdc_obj.ccdcout_w_img
 			<< ISPCCDC_VP_OUT_HORZ_NUM_SHIFT) |
 			(ispccdc_obj.ccdcout_h <<
 			ISPCCDC_VP_OUT_VERT_NUM_SHIFT),
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_VP_OUT);
 	} else {
-		isp_reg_writel(((ispccdc_obj.ccdcout_w -
-			ispccdc_obj.ccdcin_woffset)
+		isp_reg_writel(((ispccdc_obj.ccdcout_w_img)
 			<< ISPCCDC_VP_OUT_HORZ_NUM_SHIFT) |
-			((ispccdc_obj.ccdcout_h -
-			ispccdc_obj.ccdcin_hoffset - 1) <<
+			((ispccdc_obj.ccdcout_h) <<
 			ISPCCDC_VP_OUT_VERT_NUM_SHIFT),
 			OMAP3_ISP_IOMEM_CCDC,
 			ISPCCDC_VP_OUT);
@@ -1578,7 +1613,6 @@ void ispccdc_lsc_pref_comp_handler(void)
 
 	isp_reg_and(OMAP3_ISP_IOMEM_MAIN, ISP_IRQ0ENABLE,
 		    ~IRQ0ENABLE_CCDC_LSC_PREF_COMP_IRQ);
-	__ispccdc_enable(1);
 
 	spin_unlock_irqrestore(&ispccdc_obj.lock, flags);
 }
@@ -1586,9 +1620,9 @@ void ispccdc_lsc_pref_comp_handler(void)
 static void __ispccdc_enable(u8 enable)
 {
 	if (enable) {
-		int enable_lsc = ispccdc_obj.ccdc_inpfmt == CCDC_RAW &&
+		int enable_lsc = (ispccdc_obj.ccdc_inpfmt == CCDC_RAW &&
 		    ispccdc_obj.lsc_request_enable == 1 &&
-		    ispccdc_validate_config_lsc(&ispccdc_obj.lsc_config) == 0;
+		    ispccdc_validate_config_lsc(&ispccdc_obj.lsc_config) == 0);
 		if (enable_lsc) {
 			/* Defer CCDC enablement for
 			 * when the prefetch is completed. */
@@ -1598,11 +1632,15 @@ static void __ispccdc_enable(u8 enable)
 				   IRQ0ENABLE_CCDC_LSC_PREF_COMP_IRQ);
 			ispccdc_enable_lsc(1);
 			ispccdc_obj.lsc_request_enable = -1;
-			return;
 		}
-	} else if (ispccdc_obj.lsc_request_enable == 0) {
+	} else if (ispccdc_obj.lsc_request_enable == 0 &&
+					!ispccdc_lsc_busy()) {
 		ispccdc_enable_lsc(0);
 		ispccdc_obj.lsc_request_enable = -1;
+
+		isp_reg_and(OMAP3_ISP_IOMEM_MAIN,
+			   ISP_CTRL, ~(ISPCTRL_SBL_SHARED_RPORTB
+			   | ISPCTRL_SBL_RD_RAM_EN));
 	}
 	isp_reg_and_or(OMAP3_ISP_IOMEM_CCDC, ISPCCDC_PCR, ~ISPCCDC_PCR_EN,
 		       enable ? ISPCCDC_PCR_EN : 0);
@@ -1626,9 +1664,8 @@ EXPORT_SYMBOL(ispccdc_enable);
  **/
 void ispccdc_suspend(void)
 {
-	if (ispccdc_obj.pm_state) {
+	if (ispccdc_obj.pm_state)
 		__ispccdc_enable(0);
-	}
 }
 EXPORT_SYMBOL(ispccdc_suspend);
 
@@ -1637,9 +1674,8 @@ EXPORT_SYMBOL(ispccdc_suspend);
  **/
 void ispccdc_resume(void)
 {
-	if (ispccdc_obj.pm_state) {
+	if (ispccdc_obj.pm_state)
 		__ispccdc_enable(1);
-	}
 }
 EXPORT_SYMBOL(ispccdc_resume);
 
@@ -1804,6 +1840,7 @@ int __init isp_ccdc_init(void)
 	ispccdc_config_crop(0, 0, 0, 0);
 	mutex_init(&ispccdc_obj.mutexlock);
 
+	ispccdc_obj.dcsub = 0;
 	ispccdc_obj.update_lsc_config = 0;
 	ispccdc_obj.lsc_request_enable = -1;
 	ispccdc_obj.lsc_enable = 0;

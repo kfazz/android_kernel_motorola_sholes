@@ -320,8 +320,13 @@ int snd_ctl_add(struct snd_card *card, struct snd_kcontrol *kcontrol)
 
 	if (! kcontrol)
 		return err;
-	if (snd_BUG_ON(!card || !kcontrol->info))
+	/*if (snd_BUG_ON(!kcontrol->info)) {
+		printk("no kcontrol\n");
+		goto error; }*/
+	if (snd_BUG_ON(!card)) {
+		printk("no card\n");
 		goto error;
+	}
 	id = kcontrol->id;
 	down_write(&card->controls_rwsem);
 	if (snd_ctl_find_id(card, &id)) {

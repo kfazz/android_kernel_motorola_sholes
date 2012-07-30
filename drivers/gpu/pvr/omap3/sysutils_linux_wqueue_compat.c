@@ -205,7 +205,7 @@ PVRSRV_ERROR EnableSGXClocks(SYS_DATA *psSysData)
 	}
 
 		IMG_UINT32 rate = clk_get_rate(psSysSpecData->psSGX_FCK); //Get the functional clock
-		printk(KERN_DEBUG "EnableSGXClocks: SGX Functional Clock is %dMhz", HZ_TO_MHZ(rate));
+		printk(KERN_DEBUG "EnableSGXClocks: SGX Functional Clock is %dMhz\n", HZ_TO_MHZ(rate));
 
 
 #if defined(SYS_OMAP3430_PIN_MEMORY_BUS_CLOCK)

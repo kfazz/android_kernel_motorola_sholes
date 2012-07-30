@@ -45,10 +45,6 @@ void hp3a_enable_raw(unsigned long buffer_addr)
 		}
 
 		/* Set ccdc config register. */
-		/*
-		omap_writel((omap_readl(ISPCCDC_CFG)) & \
-				~ISPCCDC_CFG_WENLOG, ISPCCDC_CFG);
-		*/
 		omap_writel((omap_readl(ISPCCDC_CFG)) | ISPCCDC_CFG_WENLOG,
 							ISPCCDC_CFG);
 
@@ -70,7 +66,6 @@ void hp3a_enable_raw(unsigned long buffer_addr)
 		/* ISPCCDC_SYN_MODE must be set last. */
 		omap_writel((omap_readl(ISPCCDC_SYN_MODE) |
 				ISPCCDC_SYN_MODE_WEN |
-				/* ISPCCDC_SYN_MODE_EXWEN | */
 				ISPCCDC_SYN_MODE_VP2SDR),
 				ISPCCDC_SYN_MODE);
 	}
@@ -98,6 +93,9 @@ void hp3a_disable_raw(void)
 int hp3a_configure_raw(struct hp3a_raw_config *raw)
 {
 	unsigned long irqflags = 0;
+
+	if (g_tc.hw_initialized == 0)
+		return -EINVAL;
 
 	/* Synchronize with stats collection. */
 	spin_lock_irqsave(&g_tc.stats_lock, irqflags);

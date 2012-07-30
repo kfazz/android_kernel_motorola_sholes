@@ -111,9 +111,8 @@ int map_user_to_kernel(struct hp3a_buffer *src, struct hp3a_internal_buffer *des
 }
 
 /**
- * unmap_buffers_from_kernel - Maps user memory in to kernel space and then maps
- *				kernel memory to isp address space.
- * @ibuffer: Pointer to internal buffer to be unmapped from kernel spcae.
+ * unmap_buffers_from_kernel - Unmaps memory from isp and kernel address space.
+ * @ibuffer: Pointer to internal buffer to be unmapped.
  *
  * No return value.
  **/

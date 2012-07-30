@@ -27,6 +27,8 @@
 #include <plat/dma.h>
 #include <plat/mcbsp.h>
 
+#include "../mach-omap2/cm.h"
+
 struct omap_mcbsp **mcbsp_ptr;
 int omap_mcbsp_count;
 
@@ -46,6 +48,16 @@ int omap_mcbsp_read(void __iomem *io_base, u16 reg)
 		return __raw_readl(io_base + reg);
 }
 
+static void omap_mcbsp_st_write(struct omap_mcbsp *mcbsp, u16 reg, u32 val)
+{
+	__raw_writel(val, mcbsp->st_data->io_base_st + reg);
+}
+
+static int omap_mcbsp_st_read(struct omap_mcbsp *mcbsp, u16 reg)
+{
+	return __raw_readl(mcbsp->st_data->io_base_st + reg);
+}
+
 #define OMAP_MCBSP_READ(base, reg) \
 			omap_mcbsp_read(base, OMAP_MCBSP_REG_##reg)
 #define OMAP_MCBSP_WRITE(base, reg, val) \
@@ -53,6 +65,12 @@ int omap_mcbsp_read(void __iomem *io_base, u16 reg)
 
 #define omap_mcbsp_check_valid_id(id)	(id < omap_mcbsp_count)
 #define id_to_mcbsp_ptr(id)		mcbsp_ptr[id];
+
+#define MCBSP_ST_READ(mcbsp, reg) \
+                        omap_mcbsp_st_read(mcbsp, OMAP_ST_REG_##reg)
+#define MCBSP_ST_WRITE(mcbsp, reg, val) \
+                        omap_mcbsp_st_write(mcbsp, OMAP_ST_REG_##reg, val)
+
 
 static void omap_mcbsp_dump_reg(u8 id)
 {
@@ -1320,6 +1338,309 @@ err_ioremap:
 exit:
 	return ret;
 }
+
+
+ /*
+  * omap_mcbsp_get_tx_delay returns the number of used slots in the McBSP FIFO
+  */
+ u16 omap_mcbsp_get_tx_delay(unsigned int id)
+ {
+         struct omap_mcbsp *mcbsp;
+         u16 buffstat;
+ 
+         if (!omap_mcbsp_check_valid_id(id)) {
+                 printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+                 return -ENODEV;
+         }
+         mcbsp = id_to_mcbsp_ptr(id);
+         if (mcbsp->pdata->buffer_size == 0)
+                 return 0;
+ 
+         /* Returns the number of free locations in the buffer */
+         buffstat = OMAP_MCBSP_READ(mcbsp, XBUFFSTAT);
+ 
+         /* Number of slots are different in McBSP ports */
+         return mcbsp->pdata->buffer_size - buffstat;
+ }
+ EXPORT_SYMBOL(omap_mcbsp_get_tx_delay);
+ 
+ /*
+  * omap_mcbsp_get_rx_delay returns the number of free slots in the McBSP FIFO
+  * to reach the threshold value (when the DMA will be triggered to read it)
+  */
+ u16 omap_mcbsp_get_rx_delay(unsigned int id)
+ {
+         struct omap_mcbsp *mcbsp;
+         u16 buffstat, threshold;
+ 
+         if (!omap_mcbsp_check_valid_id(id)) {
+                 printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+                 return -ENODEV;
+         }
+         mcbsp = id_to_mcbsp_ptr(id);
+         if (mcbsp->pdata->buffer_size == 0)
+                 return 0;
+ 
+         /* Returns the number of used locations in the buffer */
+         buffstat = OMAP_MCBSP_READ(mcbsp, RBUFFSTAT);
+         /* RX threshold */
+         threshold = OMAP_MCBSP_READ(mcbsp, THRSH1);
+ 
+         /* Return the number of location till we reach the threshold limit */
+         if (threshold <= buffstat)
+                 return 0;
+         else
+                 return threshold - buffstat;
+ }
+ EXPORT_SYMBOL(omap_mcbsp_get_rx_delay);
+
+static void omap_st_on(struct omap_mcbsp *mcbsp)
+{
+	unsigned int w;
+
+	/*
+	 * Sidetone uses McBSP ICLK - which must not idle when sidetones
+	 * are enabled or sidetones start sounding ugly.
+	 */
+	w = cm_read_mod_reg(OMAP3430_PER_MOD, CM_AUTOIDLE);
+	w &= ~(1 << (mcbsp->id - 2));
+	cm_write_mod_reg(w, OMAP3430_PER_MOD, CM_AUTOIDLE);
+
+	/* Enable McBSP Sidetone */
+	w = OMAP_MCBSP_READ(mcbsp, SSELCR);
+	OMAP_MCBSP_WRITE(mcbsp, SSELCR, w | SIDETONEEN);
+
+	//omap_hwmod_set_module_autoidle(mcbsp->oh[1], 0);
+
+	/* Enable Sidetone from Sidetone Core */
+	w = MCBSP_ST_READ(mcbsp, SSELCR);
+	MCBSP_ST_WRITE(mcbsp, SSELCR, w | ST_SIDETONEEN);
+}
+
+static void omap_st_off(struct omap_mcbsp *mcbsp)
+{
+	unsigned int w;
+
+	w = MCBSP_ST_READ(mcbsp, SSELCR);
+	MCBSP_ST_WRITE(mcbsp, SSELCR, w & ~(ST_SIDETONEEN));
+
+	//omap_hwmod_set_module_autoidle(mcbsp->oh[1], 1);
+
+	w = OMAP_MCBSP_READ(mcbsp, SSELCR);
+	OMAP_MCBSP_WRITE(mcbsp, SSELCR, w & ~(SIDETONEEN));
+
+	w = cm_read_mod_reg(OMAP3430_PER_MOD, CM_AUTOIDLE);
+	w |= 1 << (mcbsp->id - 2);
+	cm_write_mod_reg(w, OMAP3430_PER_MOD, CM_AUTOIDLE);
+}
+
+static void omap_st_fir_write(struct omap_mcbsp *mcbsp, s16 *fir)
+{
+	u16 val, i;
+
+	//omap_hwmod_set_module_autoidle(mcbsp->oh[1], 0);
+
+	val = MCBSP_ST_READ(mcbsp, SSELCR);
+
+	if (val & ST_COEFFWREN)
+		MCBSP_ST_WRITE(mcbsp, SSELCR, val & ~(ST_COEFFWREN));
+
+	MCBSP_ST_WRITE(mcbsp, SSELCR, val | ST_COEFFWREN);
+
+	for (i = 0; i < 128; i++)
+		MCBSP_ST_WRITE(mcbsp, SFIRCR, fir[i]);
+
+	i = 0;
+
+	val = MCBSP_ST_READ(mcbsp, SSELCR);
+	while (!(val & ST_COEFFWRDONE) && (++i < 1000))
+		val = MCBSP_ST_READ(mcbsp, SSELCR);
+
+	MCBSP_ST_WRITE(mcbsp, SSELCR, val & ~(ST_COEFFWREN));
+
+	if (i == 1000)
+		dev_err(mcbsp->dev, "McBSP FIR load error!\n");
+}
+
+
+static void omap_st_chgain(struct omap_mcbsp *mcbsp)
+{
+	u16 w;
+	struct omap_mcbsp_st_data *st_data = mcbsp->st_data;
+
+	//omap_hwmod_set_module_autoidle(mcbsp->oh[1], 0);
+
+	w = MCBSP_ST_READ(mcbsp, SSELCR);
+
+	MCBSP_ST_WRITE(mcbsp, SGAINCR, ST_CH0GAIN(st_data->ch0gain) | \
+		      ST_CH1GAIN(st_data->ch1gain));
+}
+
+int omap_st_set_chgain(unsigned int id, int channel, s16 chgain)
+{
+	struct omap_mcbsp *mcbsp;
+	struct omap_mcbsp_st_data *st_data;
+	int ret = 0;
+
+	if (!omap_mcbsp_check_valid_id(id)) {
+		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+		return -ENODEV;
+	}
+
+	mcbsp = id_to_mcbsp_ptr(id);
+	st_data = mcbsp->st_data;
+
+	if (!st_data)
+		return -ENOENT;
+
+	spin_lock_irq(&mcbsp->lock);
+	if (channel == 0)
+		st_data->ch0gain = chgain;
+	else if (channel == 1)
+		st_data->ch1gain = chgain;
+	else
+		ret = -EINVAL;
+
+	if (st_data->enabled)
+		omap_st_chgain(mcbsp);
+	spin_unlock_irq(&mcbsp->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(omap_st_set_chgain);
+
+int omap_st_get_chgain(unsigned int id, int channel, s16 *chgain)
+{
+	struct omap_mcbsp *mcbsp;
+	struct omap_mcbsp_st_data *st_data;
+	int ret = 0;
+
+	if (!omap_mcbsp_check_valid_id(id)) {
+		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+		return -ENODEV;
+	}
+
+	mcbsp = id_to_mcbsp_ptr(id);
+	st_data = mcbsp->st_data;
+
+	if (!st_data)
+		return -ENOENT;
+
+	spin_lock_irq(&mcbsp->lock);
+	if (channel == 0)
+		*chgain = st_data->ch0gain;
+	else if (channel == 1)
+		*chgain = st_data->ch1gain;
+	else
+		ret = -EINVAL;
+	spin_unlock_irq(&mcbsp->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(omap_st_get_chgain);
+
+static int omap_st_start(struct omap_mcbsp *mcbsp)
+{
+	struct omap_mcbsp_st_data *st_data = mcbsp->st_data;
+
+	if (st_data && st_data->enabled && !st_data->running) {
+		omap_st_fir_write(mcbsp, st_data->taps);
+		omap_st_chgain(mcbsp);
+
+		if (!mcbsp->free) {
+			omap_st_on(mcbsp);
+			st_data->running = 1;
+		}
+	}
+
+	return 0;
+}
+
+int omap_st_enable(unsigned int id)
+{
+	struct omap_mcbsp *mcbsp;
+	struct omap_mcbsp_st_data *st_data;
+
+	if (!omap_mcbsp_check_valid_id(id)) {
+		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+		return -ENODEV;
+	}
+
+	mcbsp = id_to_mcbsp_ptr(id);
+	st_data = mcbsp->st_data;
+
+	if (!st_data)
+		return -ENODEV;
+
+	spin_lock_irq(&mcbsp->lock);
+	st_data->enabled = 1;
+	omap_st_start(mcbsp);
+	spin_unlock_irq(&mcbsp->lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(omap_st_enable);
+
+static int omap_st_stop(struct omap_mcbsp *mcbsp)
+{
+	struct omap_mcbsp_st_data *st_data = mcbsp->st_data;
+
+	if (st_data && st_data->running) {
+		if (!mcbsp->free) {
+			omap_st_off(mcbsp);
+			st_data->running = 0;
+		}
+	}
+
+	return 0;
+}
+
+int omap_st_disable(unsigned int id)
+{
+	struct omap_mcbsp *mcbsp;
+	struct omap_mcbsp_st_data *st_data;
+	int ret = 0;
+
+	if (!omap_mcbsp_check_valid_id(id)) {
+		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+		return -ENODEV;
+	}
+
+	mcbsp = id_to_mcbsp_ptr(id);
+	st_data = mcbsp->st_data;
+
+	if (!st_data)
+		return -ENODEV;
+
+	spin_lock_irq(&mcbsp->lock);
+	omap_st_stop(mcbsp);
+	st_data->enabled = 0;
+	spin_unlock_irq(&mcbsp->lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(omap_st_disable);
+
+int omap_st_is_enabled(unsigned int id)
+{
+	struct omap_mcbsp *mcbsp;
+	struct omap_mcbsp_st_data *st_data;
+
+	if (!omap_mcbsp_check_valid_id(id)) {
+		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
+		return -ENODEV;
+	}
+
+	mcbsp = id_to_mcbsp_ptr(id);
+	st_data = mcbsp->st_data;
+
+	if (!st_data)
+		return -ENODEV;
+
+
+	return st_data->enabled;
+}
+EXPORT_SYMBOL(omap_st_is_enabled);
 
 static int __devexit omap_mcbsp_remove(struct platform_device *pdev)
 {
