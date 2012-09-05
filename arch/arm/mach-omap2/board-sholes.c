@@ -436,6 +436,17 @@ static struct omap_opp sholes_mpu_rate_table[] = {
 #define S380M 380000000
 #define S410M 410000000
 
+#if defined(CONFIG_SHOLES_CORE_160)
+#define SHOLES_L3_MAX 160000000
+#elif defined(CONFIG_SHOLES_CORE_180)
+#define SHOLES_L3_MAX 180000000
+#elif defined(CONFIG_SHOLES_CORE_200)
+#define SHOLES_L3_MAX 200000000
+#else
+#define SHOLES_L3_MAX 160000000
+#endif
+
+
 
 static struct omap_opp sholes_l3_rate_table[] = {
 	{0, 0, 0},
@@ -444,7 +455,7 @@ static struct omap_opp sholes_l3_rate_table[] = {
 	/*OPP2*/
 	{S80M, VDD2_OPP2, 0x27},
 	/*OPP3*/
-	{S160M, VDD2_OPP3, 0x2E},
+	{SHOLES_L3_MAX, VDD2_OPP3, 0x2E},
 };
 
 static struct omap_opp sholes_dsp_rate_table[] = {
@@ -452,13 +463,13 @@ static struct omap_opp sholes_dsp_rate_table[] = {
 	/*OPP1*/
 	{S90M, VDD1_OPP1, 0x20},
 	/*OPP2*/
-	{S160M, VDD1_OPP2, 0x27},
+	{S180M, VDD1_OPP2, 0x27}, 
 	/*OPP3*/
-	{S340M, VDD1_OPP3, 0x32},
+	{S360M, VDD1_OPP3, 0x32}, 
 	/*OPP4*/
-	{S380M, VDD1_OPP4, 0x38},
+	{S400M, VDD1_OPP4, 0x38},
 	/*OPP5*/
-	{S410M, VDD1_OPP5, 0x3E},
+	{S430M, VDD1_OPP5, 0x3E},
 };
 
 static void __init sholes_init_irq(void)

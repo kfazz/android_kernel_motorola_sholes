@@ -26,6 +26,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/sound.h>
 #include <linux/poll.h>
+#include <linux/cpcap_audio_platform_data.h>
 
 #ifdef CONFIG_WAKELOCK
 #include <linux/wakelock.h>
@@ -35,9 +36,9 @@
 #include <plat/control.h>
 #include <plat/gpio.h>
 #include <plat/hardware.h>
-//#include <plat/board-mapphone.h>
+#include <plat/board-sholes.h>
 #include <linux/spi/cpcap.h>
-//#include <linux/sound_fm_mixer.h>
+#include <linux/sound_fm_mixer.h>
 #include "omap34xx_audio_driver.h"
 #include "cpcap_audio_driver.h"
 
@@ -69,7 +70,7 @@
  * Log level 1 major messages
  * Log level 0 no messages
  */
-#define AUDIO_LOG_LEVEL 1
+#define AUDIO_LOG_LEVEL 0
 
 #define AUDIO_DEBUG_LOG(args...)  printk(KERN_INFO "AUDIO_DRIVER:" args)
 
@@ -267,7 +268,6 @@ static struct {
 
 struct cpcap_audio_state cpcap_audio_state = {
 	NULL,
-	CPCAP_AUDIO_MODE_NORMAL,
 	CPCAP_AUDIO_CODEC_OFF,
 	CPCAP_AUDIO_CODEC_RATE_8000_HZ,
 	CPCAP_AUDIO_CODEC_MUTE,
@@ -285,9 +285,10 @@ struct cpcap_audio_state cpcap_audio_state = {
 	CPCAP_AUDIO_BALANCE_NEUTRAL,
 	CPCAP_AUDIO_BALANCE_NEUTRAL,
 	7,			/*default output gain */
+	0,			/*default FM gain*/
 	CPCAP_AUDIO_IN_NONE,
 	31,			/*default input_gain */
-	CPCAP_AUDIO_RAT_NONE,
+	31,			/*default input_gain */
 	CPCAP_AUDIO_DAI_CONFIG_NORMAL
 };
 
@@ -318,11 +319,6 @@ static struct wake_lock mcbsp_wakelock;
 
 #ifdef MCBSP_WRAPPER
 
-static int is_cdma_phone()
-{
-	return 1;
-}
-
 static void omap2_mcbsp_rx_dma_callback(int lch, unsigned short ch_status,
 					void *data)
 {
@@ -339,6 +335,11 @@ static void omap2_mcbsp_rx_dma_callback(int lch, unsigned short ch_status,
 		return;
 	}
 	io_base = mcbsp_dma_rx->io_base;
+
+	if (omap_mcbsp_read(io_base, OMAP_MCBSP_REG_IRQST) & 0x0020) {
+		AUDIO_ERROR_LOG("McBSP Capture Overflow! Data Lost!");
+		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_IRQST, 0x0020);
+	}
 
 	/* If we are at the last transfer, Shut down the reciever */
 	if ((mcbsp_wrapper[id].auto_reset & OMAP_MCBSP_AUTO_RRST)
@@ -522,12 +523,17 @@ static void mcbsp_power_settings(unsigned int id, int level)
 	mcbsp = mcbsp_ptr[id];
 	io_base = mcbsp->io_base;
 
-	if (level == MCBSP2_SYSCONFIG_LVL1)
-		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SYSCON,
-				 CLOCKACTIVITY(MCBSP_SYSC_IOFF_FON) |
-				 SIDLEMODE(SMART_IDLE) | ENAWAKEUP);
-
-	if (level == MCBSP2_SYSCONFIG_LVL2)
+	if (level == MCBSP2_SYSCONFIG_LVL1) {
+		if (id == OMAP_MCBSP2) {
+			omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SYSCON,
+				CLOCKACTIVITY(MCBSP_SYSC_IOFF_FON) |
+				SIDLEMODE(SMART_IDLE) | ENAWAKEUP);
+		} else {
+			omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SYSCON,
+				CLOCKACTIVITY(MCBSP_SYSC_IOFF_FON) |
+				SIDLEMODE(NO_IDLE));
+		}
+	} else if (level == MCBSP2_SYSCONFIG_LVL2)
 		omap_mcbsp_write(io_base, OMAP_MCBSP_REG_SYSCON,
 				 CLOCKACTIVITY(MCBSP_SYSC_IOFF_FOFF) |
 				 SIDLEMODE(FORCE_IDLE));
@@ -1097,6 +1103,53 @@ int omap2_mcbsp_params_cfg(unsigned int id, int interface_mode,
 }
 #endif /* MCBSP_WRAPPER */
 
+static char *getstring(int flag)
+{
+	if (flag)
+		return "true";
+	return "false";
+}
+
+static void dump_platform_config(void)
+{
+	printk(KERN_DEBUG "--------Audio Platform Config-------\n"
+			  "Analog Downlink: %s\n"
+			  "Independent BT bus: %s\n"
+			  "I2S BP: %s\n"
+			  "19Mhz BP: %s\n"
+			  "Mic3: %s\n"
+			  "Stereo Loudspeaker: %s\n",
+			  getstring(cpcap_audio_has_analog_downlink()),
+			  getstring(cpcap_audio_has_independent_bt()),
+			  getstring(cpcap_audio_has_i2s_bp()),
+			  getstring(cpcap_audio_has_19mhz_bp()),
+			  getstring(cpcap_audio_has_mic3()),
+			  getstring(cpcap_audio_has_stereo_loudspeaker()));
+
+}
+
+static void set_codec_mode(void)
+{
+	if ((cpcap_audio_state.dai_config ==
+			CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) &&
+			  cpcap_audio_has_independent_bt() &&
+		(primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
+		&& (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
+		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
+		gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 0);
+	} else if ((primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
+		&& (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
+		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_CLOCK_ONLY;
+		cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;;
+		if (cpcap_audio_has_independent_bt())
+			gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
+	} else {
+		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
+		if (cpcap_audio_has_independent_bt())
+			gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
+	}
+}
+
 static void map_audioic_speakers(void)
 {
 	if (state.stdac_out_stream != NULL ||
@@ -1112,17 +1165,24 @@ static void map_audioic_speakers(void)
 				CPCAP_AUDIO_OUT_NONE;
 	}
 
-	if (cpcap_audio_state.rat_type == CPCAP_AUDIO_RAT_CDMA) {
-		cpcap_audio_state.ext_primary_speaker = primary_spkr_setting;
-		cpcap_audio_state.ext_secondary_speaker =
+	if (cpcap_audio_state.dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
+		if (cpcap_audio_has_analog_downlink()) {
+			cpcap_audio_state.ext_primary_speaker =
+							primary_spkr_setting;
+			cpcap_audio_state.ext_secondary_speaker =
 							secondary_spkr_setting;
-		cpcap_audio_state.analog_source = CPCAP_AUDIO_ANALOG_SOURCE_L;
+			cpcap_audio_state.analog_source =
+						CPCAP_AUDIO_ANALOG_SOURCE_L;
+		} else {
+			cpcap_audio_state.codec_primary_speaker =
+							primary_spkr_setting;
+			cpcap_audio_state.codec_secondary_speaker =
+							secondary_spkr_setting;
+		}
 	} else if (cpcap_audio_state.dai_config ==
 				CPCAP_AUDIO_DAI_CONFIG_NORMAL &&
-				((state.codec_out_stream != NULL &&
-				state.codec_out_stream->active == 1) ||
-				 cpcap_audio_state.rat_type ==
-						 CPCAP_AUDIO_RAT_UMTS)) {
+				(state.codec_out_stream != NULL &&
+				state.codec_out_stream->active == 1)) {
 		cpcap_audio_state.codec_primary_speaker = primary_spkr_setting;
 		cpcap_audio_state.codec_secondary_speaker =
 							secondary_spkr_setting;
@@ -1133,30 +1193,8 @@ static void map_audioic_speakers(void)
 				CPCAP_AUDIO_OUT_NONE;
 	}
 
-	if (state.dev_dsp1_open_count > 0) {
-		if ((cpcap_audio_state.rat_type == CPCAP_AUDIO_RAT_CDMA) &&
-			(primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
-			&& (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
-			AUDIO_LEVEL1_LOG("Setting codec in Call BT mode\n");
-			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
-			gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 0);
-		} else if ((primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
-			 && (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
-			AUDIO_LEVEL1_LOG("Setting codec Ouf-of-Call BT mode\n");
-			cpcap_audio_state.codec_mode =
-						CPCAP_AUDIO_CODEC_CLOCK_ONLY;
-			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
-			if (is_cdma_phone())
-				gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP,
-									1);
-		} else {
-			AUDIO_LEVEL1_LOG("Setting codec in Normal mode\n");
-			cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
-			if (is_cdma_phone())
-				gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP,
-									1);
-		}
-	}
+	if (state.dev_dsp1_open_count > 0)
+		set_codec_mode();
 }
 
 static int audio_select_speakers(int spkr)
@@ -1744,7 +1782,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		}
 
 		if (cpcap_audio_state.dai_config !=
-				CPCAP_AUDIO_DAI_CONFIG_NORMAL) {
+			CPCAP_AUDIO_DAI_CONFIG_NORMAL &&
+			cpcap_audio_state.dai_config !=
+				CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
 			/* in linked DAI modes, codec and stdac are sync'ed */
 			cpcap_audio_state.stdac_rate =
 				valid_sample_rates[count].cpcap_audio_rate;
@@ -1968,11 +2008,12 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		TRY(copy_from_user(&mic, (int *)arg, sizeof(int)))
 		AUDIO_LEVEL2_LOG("SOUND_MIXER_RECSRC with mic = %#x\n", mic);
 		if (mic != mic_setting) {
-			if (state.dev_dsp1_open_count > 0 ||
+			if (state.codec_in_stream->active == 1 ||
 					cpcap_audio_state.dai_config !=
 						CPCAP_AUDIO_DAI_CONFIG_NORMAL) {
 				cpcap_audio_state.microphone = mic;
-				cpcap_audio_state.input_gain = 0;
+				cpcap_audio_state.input_gain_l = 0;
+				cpcap_audio_state.input_gain_r = 0;
 				cpcap_audio_set_audio_state(&cpcap_audio_state);
 			}
 			mic_setting = mic;
@@ -1997,8 +2038,9 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 
 			if (cpcap_audio_state.codec_mode ==
 							CPCAP_AUDIO_CODEC_ON &&
-				cpcap_audio_state.rat_type !=
-							CPCAP_AUDIO_RAT_CDMA)
+				(cpcap_audio_state.dai_config !=
+					CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL ||
+					!cpcap_audio_has_analog_downlink()))
 				cpcap_audio_state.codec_mute =
 						CPCAP_AUDIO_CODEC_UNMUTE;
 		}
@@ -2015,13 +2057,68 @@ static int audio_ioctl(struct inode *inode, struct file *file,
 		unsigned int gain;
 		TRY(copy_from_user(&gain, (unsigned int *)arg,
 						sizeof(unsigned int)))
-		cpcap_audio_state.input_gain = gain;
+		cpcap_audio_state.input_gain_r = gain & 0xFF;
+		cpcap_audio_state.input_gain_l = (gain & 0xFF00) >> 8;
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
-		AUDIO_LEVEL2_LOG("SOUND_MIXER_RECLEV, input_gain = %d\n",
-				cpcap_audio_state.input_gain);
+		AUDIO_LEVEL2_LOG("SOUND_MIXER_RECLEV, input_gain_l = %u, "
+			"input_gain_r = %u\n",
+			cpcap_audio_state.input_gain_l,
+			cpcap_audio_state.input_gain_r);
 		break;
 	}
 
+	case SOUND_MIXER_FMPATH:
+	{
+		unsigned int spkr;
+		TRY(copy_from_user(&spkr, (int *)arg, sizeof(spkr)))
+		AUDIO_LEVEL2_LOG("SOUND_MIXER_FMPATH with spkr = %#x\n", spkr);
+		cpcap_audio_state.ext_primary_speaker = (spkr & 0xFFFF);
+		if (cpcap_audio_state.ext_primary_speaker !=
+				CPCAP_AUDIO_OUT_LOUDSPEAKER)
+			cpcap_audio_state.ext_primary_speaker =
+					CPCAP_AUDIO_OUT_STEREO_HEADSET;
+
+		cpcap_audio_state.fm_output_gain = (spkr >> 16) & 0xFF;
+		if (cpcap_audio_state.fm_output_gain == 0) {
+			cpcap_audio_state.analog_source =
+						CPCAP_AUDIO_ANALOG_SOURCE_OFF;
+		} else if (state.fm_on == 1) {
+			cpcap_audio_state.analog_source =
+					CPCAP_AUDIO_ANALOG_SOURCE_R; //_STEREO
+		}
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
+		break;
+	}
+
+	case SOUND_MIXER_FMON:
+	{
+		AUDIO_LEVEL2_LOG("SOUND_MIXER_FMON\n");
+		if (cpcap_audio_has_analog_downlink())
+			cpcap_regacc_write(cpcap_audio_state.cpcap,
+				CPCAP_REG_GPIO1,
+				CPCAP_BIT_GPIO1DRV, CPCAP_BIT_GPIO1DRV);
+
+		cpcap_audio_state.analog_source =
+					CPCAP_AUDIO_ANALOG_SOURCE_R; //_STEREO
+		state.fm_on = 1;
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
+		break;
+	}
+
+	case SOUND_MIXER_FMOFF:
+	{
+		AUDIO_LEVEL2_LOG("SOUND_MIXER_FMOFF\n");
+		if (cpcap_audio_has_analog_downlink())
+			cpcap_regacc_write(cpcap_audio_state.cpcap,
+				CPCAP_REG_GPIO1,
+				0, CPCAP_BIT_GPIO1DRV);
+		cpcap_audio_state.ext_primary_speaker = CPCAP_AUDIO_OUT_NONE;
+		cpcap_audio_state.analog_source = CPCAP_AUDIO_ANALOG_SOURCE_OFF;
+		cpcap_audio_state.fm_output_gain = 0;
+		state.fm_on = 0;
+		cpcap_audio_set_audio_state(&cpcap_audio_state);
+		break;
+	}
 
 	case SOUND_MIXER_PRIVATE1:  /* Codec loopback mode */
 	{
@@ -2264,26 +2361,6 @@ out:
 	mutex_unlock(&audio_lock);
 	return ret;
 }
-static void set_codec_mode(void)
-{
-	if ((cpcap_audio_state.rat_type == CPCAP_AUDIO_RAT_CDMA) &&
-		(primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
-		&& (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
-		AUDIO_LEVEL1_LOG("Setting codec in Call BT mode\n");
-		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
-		gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 0);
-	} else if ((primary_spkr_setting == CPCAP_AUDIO_OUT_BT_MONO)
-		&& (secondary_spkr_setting == CPCAP_AUDIO_OUT_NONE)) {
-		AUDIO_LEVEL1_LOG("Setting codec Ouf-of-Call BT mode\n");
-		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_CLOCK_ONLY;
-		cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;;
-		gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
-	} else {
-		AUDIO_LEVEL1_LOG("Setting codec in Normal mode\n");
-		cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_ON;
-		gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
-	}
-}
 
 static int audio_codec_open_helper(struct inode *inode, struct file *file)
 {
@@ -2291,44 +2368,46 @@ static int audio_codec_open_helper(struct inode *inode, struct file *file)
 
 	if (file->f_flags & O_TRUNC) {
 		AUDIO_LEVEL1_LOG("CODEC in phone mode called \n");
-
-			cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_CDMA;
-
-
+		cpcap_audio_state.dai_config =
+				CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL;
 		cpcap_audio_state.output_gain = 0;
 		cpcap_audio_state.codec_rate = CPCAP_AUDIO_CODEC_RATE_8000_HZ;
 
-		
+		if (cpcap_audio_has_analog_downlink()) {
 			cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 			cpcap_audio_state.analog_source =
 						CPCAP_AUDIO_ANALOG_SOURCE_L;
 			cpcap_regacc_write(cpcap_audio_state.cpcap,
 				CPCAP_REG_GPIO1, 0, CPCAP_BIT_GPIO1DRV);
-		
+		}
 
 		if (primary_spkr_setting == CPCAP_AUDIO_OUT_LOUDSPEAKER) {
-
+			if (cpcap_audio_has_analog_downlink())
 				cpcap_audio_state.ext_primary_speaker =
 							CPCAP_AUDIO_OUT_HANDSET;
-			
+			else
+				cpcap_audio_state.codec_primary_speaker =
+							CPCAP_AUDIO_OUT_HANDSET;
+
 			primary_spkr_setting = CPCAP_AUDIO_OUT_HANDSET;
 
-			/*what's a better check for mic hw configuration?*/
-			if (1) {
+			if (cpcap_audio_has_mic3()) {
 				cpcap_audio_state.microphone =
 					CPCAP_AUDIO_IN_HANDSET |
 					CPCAP_AUDIO_IN_TERTIARY_INTERNAL;
-			/*} else {
+			} else {
 				cpcap_audio_state.microphone =
 					CPCAP_AUDIO_IN_HANDSET |
-					CPCAP_AUDIO_IN_SECONDARY_INTERNAL;*/
+					CPCAP_AUDIO_IN_SECONDARY_INTERNAL;
 			}
 			mic_setting = cpcap_audio_state.microphone;
 		} else {
-			
+			if (cpcap_audio_has_analog_downlink())
 				cpcap_audio_state.ext_primary_speaker =
 							primary_spkr_setting;
-
+			else
+				cpcap_audio_state.codec_primary_speaker =
+							primary_spkr_setting;
 			cpcap_audio_state.microphone = mic_setting;
 		}
 		cpcap_audio_set_audio_state(&cpcap_audio_state);
@@ -2358,48 +2437,53 @@ static int audio_codec_release(struct inode *inode, struct file *file)
 
 
 	if (mode == O_WRONLY || mode == O_RDWR ||
-		cpcap_audio_state.rat_type != CPCAP_AUDIO_RAT_NONE) {
+		cpcap_audio_state.dai_config ==
+				CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
 		cpcap_audio_state.codec_primary_speaker = CPCAP_AUDIO_OUT_NONE;
 		cpcap_audio_state.codec_secondary_speaker
 							= CPCAP_AUDIO_OUT_NONE;
 	}
 	if (mode == O_RDONLY || mode == O_RDWR ||
-		cpcap_audio_state.rat_type != CPCAP_AUDIO_RAT_NONE) {
+		cpcap_audio_state.dai_config ==
+				CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
 		capture_channels = 1;
 		read_buf_full = 0;
 		read_buf_outstanding = 0;
 		cpcap_audio_state.microphone = CPCAP_AUDIO_IN_NONE;
 	}
 
-	if (cpcap_audio_state.rat_type == CPCAP_AUDIO_RAT_CDMA) {
-		if (state.fm_on == 0) {
-			cpcap_audio_state.ext_primary_speaker =
-					CPCAP_AUDIO_OUT_NONE;
-			cpcap_audio_state.ext_secondary_speaker =
-					CPCAP_AUDIO_OUT_NONE;
-			cpcap_audio_state.analog_source =
-					CPCAP_AUDIO_ANALOG_SOURCE_OFF;
-		} else {
-			cpcap_regacc_write(cpcap_audio_state.cpcap,
-			CPCAP_REG_GPIO1, CPCAP_BIT_GPIO1DRV,
-			CPCAP_BIT_GPIO1DRV);
+	if (cpcap_audio_state.dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
+		if (cpcap_audio_has_analog_downlink()) {
+			if (state.fm_on == 0) {
+				cpcap_audio_state.ext_primary_speaker =
+						CPCAP_AUDIO_OUT_NONE;
+				cpcap_audio_state.ext_secondary_speaker =
+						CPCAP_AUDIO_OUT_NONE;
+				cpcap_audio_state.analog_source =
+						CPCAP_AUDIO_ANALOG_SOURCE_OFF;
+			} else {
+				cpcap_regacc_write(cpcap_audio_state.cpcap,
+					CPCAP_REG_GPIO1, CPCAP_BIT_GPIO1DRV,
+					CPCAP_BIT_GPIO1DRV);
 
-			cpcap_audio_state.analog_source =
+				cpcap_audio_state.analog_source =
 					CPCAP_AUDIO_ANALOG_SOURCE_STEREO;
+			}
 		}
-		/* Set GPIO to normal */
-		AUDIO_LEVEL1_LOG("GPIO 143 HIGH\n");
-		gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
+		if (cpcap_audio_has_independent_bt())
+			gpio_direction_output(GPIO_AUDIO_SELECT_CPCAP, 1);
 	}
 
 	/* If writes switch to stdac while codec is open set enable_tx to 0 */
-	if (mode == O_WRONLY && (cpcap_audio_state.rat_type ==
-					CPCAP_AUDIO_RAT_NONE))
+	if (mode == O_WRONLY &&
+			(cpcap_audio_state.dai_config !=
+					CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL))
 		enable_tx = 0;
 
 	/* stop ssi only if turning the codec off  and we started the ssi */
 	if (state.dev_dsp1_open_count == 0) {
-		if ((cpcap_audio_state.rat_type == CPCAP_AUDIO_RAT_NONE)
+		if ((cpcap_audio_state.dai_config !=
+				CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL)
 			&& state.codec_ssi_started == 1)
 			audio_stop_ssi(inode, file);
 
@@ -2416,8 +2500,9 @@ static int audio_codec_release_helper(struct inode *inode, struct file *file)
 	cpcap_audio_state.codec_mode = CPCAP_AUDIO_CODEC_OFF;
 	cpcap_audio_state.codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 
-	if (cpcap_audio_state.rat_type != CPCAP_AUDIO_RAT_NONE) {
-		cpcap_audio_state.rat_type = CPCAP_AUDIO_RAT_NONE;
+	if (cpcap_audio_state.dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
+		AUDIO_LEVEL1_LOG("CODEC in phone mode released \n");
+		cpcap_audio_state.dai_config = CPCAP_AUDIO_DAI_CONFIG_NORMAL;
 	} else {
 		if (state.codec_out_stream != NULL) {
 			audio_discard_buf(state.codec_out_stream, inode);
@@ -2551,6 +2636,11 @@ out:
 static int audio_mixer_open(struct inode *inode, struct file *file)
 {
 	int ret = 0;
+	dump_platform_config();
+	/*cpcap_audio_state_dump(&cpcap_audio_state);*/
+	cpcap_audio_register_dump(&cpcap_audio_state);
+	printk(KERN_DEBUG "-------End Audio Driver Dump--------\n");
+
 	mutex_lock(&audio_lock);
 	if (state.dev_mixer_open_count == 1) {
 		ret = -EBUSY;
@@ -2639,6 +2729,7 @@ static void audio_callback(int status)
 
 static int audio_probe(struct platform_device *dev)
 {
+
 	mcbsp_wrapper =
 		kzalloc(omap_mcbsp_count * sizeof(struct omap_mcbsp_wrapper),
 		    GFP_KERNEL);

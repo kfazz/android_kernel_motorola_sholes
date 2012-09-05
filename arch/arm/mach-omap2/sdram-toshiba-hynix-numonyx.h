@@ -13,9 +13,21 @@
 
 #include <plat/sdrc.h>
 
+#if defined(CONFIG_SHOLES_CORE_160)
+#define SHOLES_L3_MAX 160000000
+#elif defined(CONFIG_SHOLES_CORE_180)
+#define SHOLES_L3_MAX 180000000
+#elif defined(CONFIG_SHOLES_CORE_200)
+#define SHOLES_L3_MAX 200000000
+#else
+#define SHOLES_L3_MAX 160000000
+#endif
+
+
+
 static struct omap_sdrc_params JEDEC_JESD209A_sdrc_params[] = {
 	[0] = {
-		.rate        = 180000000,
+		.rate        = SHOLES_L3_MAX,
 		.actim_ctrla = 0x92E1C4C6,
 		.actim_ctrlb = 0x0002231C,
 		.rfr_ctrl    = 0x0005E602,
