@@ -502,7 +502,8 @@ static u16 _omap3_dpll_compute_freqsel(struct clk *clk, u8 n)
 	else if (fint > 17500000 && fint <= 21000000)
 		f = 0xF;
 	else
-		pr_debug("clock: unknown freqsel setting for %d\n", n);
+		printk("unknown freqsel for %d fint is %lu\n",n, fint);
+		//pr_debug("clock: unknown freqsel setting for %d\n", n);
 
 	return f;
 }
