@@ -75,10 +75,10 @@ config MACH_OMAP3_PANDORA
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX
 
 config WIFI_CONTROL_FUNC
-        bool "Enable WiFi control function abstraction"
+	bool "Enable WiFi control function abstraction"
 	depends on MACH_OMAP_ZOOM2 || MACH_SHOLES
         help
-          Enables Power/Reset/Carddetect function abstraction
+	   Enables Power/Reset/Carddetect function abstraction
 
 config TIWLAN_SDIO
 	bool "TI WLAN Enhanced SDIO Contoller support"
@@ -135,6 +135,84 @@ config MACH_SHOLES
 config MACH_SHOLES_UMTS
 	bool "Motorola sholes umts"
 	depends on MACH_SHOLES
+
+choice
+	prompt "Sholes OC Minimum Speed"
+	depends on MACH_SHOLES
+	default SHOLES_OC_MIN_125
+
+	config SHOLES_OC_MIN_125
+		bool "125 mhz"
+
+	config SHOLES_OC_MIN_250
+		bool "250 mhz"
+endchoice
+
+choice
+	prompt "Sholes OC Maximum Speed"
+	depends on MACH_SHOLES
+	default SHOLES_OC_MAX_1000
+
+	config SHOLES_OC_MAX_800
+		bool "650 mhz"
+
+	config SHOLES_OC_MAX_800
+		bool "700 mhz"
+
+	config SHOLES_OC_MAX_800
+		bool "800 mhz"
+
+	config SHOLES_OC_MAX_900
+		bool "900 mhz"
+
+	config SHOLES_OC_MAX_1000
+		bool "1000 mhz"
+
+	config SHOLES_OC_MAX_1100
+		bool "1100 mhz"
+
+	config SHOLES_OC_MAX_1200
+		bool "1200 mhz"
+
+	config SHOLES_OC_MAX_1250
+		bool "1250 mhz"
+
+	config SHOLES_OC_MAX_1320
+		bool "1320 mhz"
+
+endchoice
+
+choice
+	prompt "Sholes OC Voltage"
+	depends on MACH_SHOLES
+	default SHOLES_OC_LV
+
+	config SHOLES_OC_LV
+		bool "Low"
+
+	config SHOLES_OC_SV
+		bool "Standard"
+
+	config SHOLES_OC_IV
+		bool "Increasing"
+
+endchoice
+
+choice
+	prompt "Sholes L3 Max Mhz"
+	depends on MACH_SHOLES
+	default SHOLES_CORE_160
+
+	config SHOLES_CORE_160
+		bool "160Mhz"
+
+	config SHOLES_CORE_180
+		bool "180Mhz"
+
+	config SHOLES_CORE_200
+		bool "200Mhz"
+
+endchoice
 
 config MACH_CM_T35
 	bool "CompuLab CM-T35 module"
