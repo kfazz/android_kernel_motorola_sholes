@@ -244,32 +244,6 @@ static inline int rfcomm_check_security(struct rfcomm_dlc *d)
 								auth_type);
 }
 
-static void rfcomm_session_timeout(unsigned long arg)
-{
-	struct rfcomm_session *s = (void *) arg;
-
-	BT_DBG("session %p state %ld", s, s->state);
-
-	set_bit(RFCOMM_TIMED_OUT, &s->flags);
-	rfcomm_schedule(RFCOMM_SCHED_TIMEO);
-}
-
-static void rfcomm_session_set_timer(struct rfcomm_session *s, long timeout)
-{
-	BT_DBG("session %p state %ld timeout %ld", s, s->state, timeout);
-
-	if (!mod_timer(&s->timer, jiffies + timeout))
-		rfcomm_session_hold(s);
-}
-
-static void rfcomm_session_clear_timer(struct rfcomm_session *s)
-{
-	BT_DBG("session %p state %ld", s, s->state);
-
-	if (timer_pending(&s->timer) && del_timer(&s->timer))
-		rfcomm_session_put(s);
-}
-
 /* ---- RFCOMM DLCs ---- */
 static void rfcomm_dlc_timeout(unsigned long arg)
 {
@@ -1407,7 +1381,7 @@ static int rfcomm_recv_rpn(struct rfcomm_session *s, int cr, int len, struct sk_
 		bit_rate = rpn->bit_rate;
 		if (bit_rate != RFCOMM_RPN_BR_115200) {
 			BT_DBG("RPN bit rate mismatch 0x%x", bit_rate);
-			bit_rate = RFCOMM_RPN_BR_115200;
+			bit_rate = rpn->bit_rate;
 			rpn_mask ^= RFCOMM_RPN_PM_BITRATE;
 		}
 	}
@@ -1891,13 +1865,6 @@ static inline void rfcomm_process_sessions(void)
 	list_for_each_safe(p, n, &session_list) {
 		struct rfcomm_session *s;
 		s = list_entry(p, struct rfcomm_session, list);
-
-		if (test_and_clear_bit(RFCOMM_TIMED_OUT, &s->flags)) {
-			s->state = BT_DISCONN;
-			rfcomm_send_disc(s, 0);
-			rfcomm_session_put(s);
-			continue;
-		}
 
 		if (s->state == BT_LISTEN) {
 			rfcomm_accept_connection(s);

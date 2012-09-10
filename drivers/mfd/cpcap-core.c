@@ -120,13 +120,13 @@ static struct platform_device cpcap_usb_det_device = {
 };
 #endif
 
-#ifdef CONFIG_SOUND_CPCAP_OMAP
+
 static struct platform_device cpcap_audio_device = {
 	.name           = "cpcap_audio",
 	.id             = -1,
 	.dev.platform_data  = NULL,
 };
-#endif
+
 
 static struct platform_device cpcap_uc_device = {
 	.name           = "cpcap_uc",
@@ -159,9 +159,7 @@ static struct platform_device *cpcap_devices[] = {
 	&cpcap_usb_device,
 	&cpcap_usb_det_device,
 #endif
-#ifdef CONFIG_SOUND_CPCAP_OMAP
 	&cpcap_audio_device,
-#endif
 	&cpcap_3mm5_device,
 	&cpcap_rtc_device,
 };

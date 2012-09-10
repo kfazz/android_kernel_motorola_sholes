@@ -266,11 +266,16 @@ enum cpcap_reg {
 	CPCAP_REG_LGDET,	/* LMR GCAI Detach Detect */
 	CPCAP_REG_LMISC,	/* LMR Misc Bits */
 	CPCAP_REG_LMACE,	/* LMR Mace IC Support */
-
-	CPCAP_REG_END = CPCAP_REG_LMACE, /* End of CPCAP registers. */
+        CPCAP_REG_TEST,         /* Test */
+        CPCAP_REG_ST_TEST1,     /* ST Test 1 */
+ 
+        CPCAP_REG_END = CPCAP_REG_ST_TEST1, /* End of CPCAP registers. */
 
 	CPCAP_REG_MAX		/* The largest valid register value. */
 	= CPCAP_REG_END,
+
+	CPCAP_REG_SIZE = CPCAP_REG_MAX + 1,
+	CPCAP_REG_UNUSED = CPCAP_REG_MAX + 2,
 };
 
 enum {
@@ -292,6 +297,9 @@ enum {
 
 	CPCAP_IOCTL_NUM_UC__START,
 	CPCAP_IOCTL_NUM_UC_MACRO_START,
+	CPCAP_IOCTL_NUM_UC_MACRO_STOP,
+	CPCAP_IOCTL_NUM_UC_GET_VENDOR,
+	CPCAP_IOCTL_NUM_UC_SET_TURBO_MODE,
 	CPCAP_IOCTL_NUM_UC__END,
 };
 
@@ -484,6 +492,8 @@ struct cpcap_batt_data {
 	int capacity;
 	int batt_volt;
 	int batt_temp;
+	int batt_full_capacity;
+	int batt_capacity_one;
 };
 
 struct cpcap_batt_ac_data {
@@ -503,6 +513,7 @@ struct cpcap_platform_data {
 	struct cpcap_spi_init_data *init;
 	int init_len;
 	unsigned short *regulator_mode_values;
+	unsigned short *regulator_off_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
 
@@ -512,6 +523,7 @@ struct cpcap_platform_data {
 			     struct cpcap_batt_data *);
 	void (*usb_changed)(struct power_supply *,
 			    struct cpcap_batt_usb_data *);
+unsigned short is_umts;
 };
 
 struct cpcap_adc_request {
@@ -602,6 +614,16 @@ struct cpcap_regacc {
 #define CPCAP_IOCTL_UC_MACRO_START \
 	_IOWR(0, CPCAP_IOCTL_NUM_UC_MACRO_START, enum cpcap_macro)
 
+#define CPCAP_IOCTL_UC_MACRO_STOP \
+	_IOWR(0, CPCAP_IOCTL_NUM_UC_MACRO_STOP, enum cpcap_macro)
+
+#define CPCAP_IOCTL_UC_GET_VENDOR \
+	_IOWR(0, CPCAP_IOCTL_NUM_UC_GET_VENDOR, enum cpcap_vendor)
+
+#define CPCAP_IOCTL_UC_SET_TURBO_MODE \
+	_IOW(0, CPCAP_IOCTL_NUM_UC_SET_TURBO_MODE, unsigned short)
+
+
 #ifdef __KERNEL__
 struct cpcap_device {
 	struct spi_device	*spi;
@@ -613,6 +635,7 @@ struct cpcap_device {
 	void			*adcdata;
 	void			*battdata;
 	void			*ucdata;
+	void			*h2w_new_state_data;
 	void			(*h2w_new_state)(int);
 };
 

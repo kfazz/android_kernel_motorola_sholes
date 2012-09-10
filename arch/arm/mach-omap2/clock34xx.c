@@ -502,7 +502,8 @@ static u16 _omap3_dpll_compute_freqsel(struct clk *clk, u8 n)
 	else if (fint > 17500000 && fint <= 21000000)
 		f = 0xF;
 	else
-		pr_debug("clock: unknown freqsel setting for %d\n", n);
+		printk("unknown freqsel for %d fint is %lu\n",n, fint);
+		//pr_debug("clock: unknown freqsel setting for %d\n", n);
 
 	return f;
 }
@@ -843,30 +844,53 @@ static int omap3_core_dpll_m2_set_rate(struct clk *clk, unsigned long rate)
 	unsigned long validrate, sdrcrate, mpurate;
 	struct omap_sdrc_params *sdrc_cs0;
 	struct omap_sdrc_params *sdrc_cs1;
+	u32 cm_clksel1_pll;
+	struct dpll_data *dd;
 	int ret;
 
 	if (!clk || !rate)
 		return -EINVAL;
 
-	if (clk != &dpll3_m2_ck)
+	if (!clk->parent || !clk->parent->dpll_data)
 		return -EINVAL;
+
+	dd = clk->parent->dpll_data;
+	cm_clksel1_pll = __raw_readl(dd->mult_div1_reg);
 
 	validrate = omap2_clksel_round_rate_div(clk, rate, &new_div);
-	if (validrate != rate)
-		return -EINVAL;
+	if (validrate == rate) {
+		cm_clksel1_pll &= ~clk->clksel_mask;
+		cm_clksel1_pll |= new_div << __ffs(clk->clksel_mask);
+	} else {
+		rate = omap2_dpll_round_rate(clk->parent, rate);
+		if (rate == ~0)
+			return -EINVAL;
 
+		cm_clksel1_pll &= ~(dd->mult_mask | dd->div1_mask | clk->clksel_mask);
+		cm_clksel1_pll |= dd->last_rounded_m << __ffs(dd->mult_mask);
+		cm_clksel1_pll |= (dd->last_rounded_n - 1) << __ffs(dd->div1_mask);
+		cm_clksel1_pll |= 1 << __ffs(clk->clksel_mask);
+
+		validrate = rate;
+	}
+
+#if 0
 	sdrcrate = sdrc_ick.rate;
 	if (rate > clk->rate)
 		sdrcrate <<= ((rate / clk->rate) >> 1);
 	else
 		sdrcrate >>= ((clk->rate / rate) >> 1);
-
+#else
+	sdrcrate = rate / 2 ;
+#endif	
 	ret = omap2_sdrc_get_params(sdrcrate, &sdrc_cs0, &sdrc_cs1);
-	if (ret)
+	if (ret) {
+		//printk("couldn't get sdrc params for sdrcrate %lu \n", sdrcrate);	
 		return -EINVAL;
+	}
 
 	if (sdrcrate < MIN_SDRC_DLL_LOCK_FREQ) {
-		pr_debug("clock: will unlock SDRC DLL\n");
+		//pr_debug("clock: will unlock SDRC DLL\n");
 		unlock_dll = 1;
 	}
 
@@ -881,8 +905,7 @@ static int omap3_core_dpll_m2_set_rate(struct clk *clk, unsigned long rate)
 	if (c == 0)
 		c = 1;
 
-	pr_debug("clock: changing CORE DPLL rate from %lu to %lu\n", clk->rate,
-		 validrate);
+	//printk("clock: changing CORE DPLL rate from %lu to %lu\n", clk->rate, validrate);
 	pr_debug("clock: SDRC CS0 timing params used:"
 		 " RFR %08x CTRLA %08x CTRLB %08x MR %08x\n",
 		 sdrc_cs0->rfr_ctrl, sdrc_cs0->actim_ctrla,
@@ -895,17 +918,22 @@ static int omap3_core_dpll_m2_set_rate(struct clk *clk, unsigned long rate)
 
 	if (sdrc_cs1)
 		omap3_configure_core_dpll(
-				  new_div, unlock_dll, c, rate > clk->rate,
+				  cm_clksel1_pll, unlock_dll, c, rate > clk->rate,
 				  sdrc_cs0->rfr_ctrl, sdrc_cs0->actim_ctrla,
 				  sdrc_cs0->actim_ctrlb, sdrc_cs0->mr,
 				  sdrc_cs1->rfr_ctrl, sdrc_cs1->actim_ctrla,
 				  sdrc_cs1->actim_ctrlb, sdrc_cs1->mr);
 	else
 		omap3_configure_core_dpll(
-				  new_div, unlock_dll, c, rate > clk->rate,
+				  cm_clksel1_pll, unlock_dll, c, rate > clk->rate,
 				  sdrc_cs0->rfr_ctrl, sdrc_cs0->actim_ctrla,
 				  sdrc_cs0->actim_ctrlb, sdrc_cs0->mr,
 				  0, 0, 0, 0);
+
+	clk->rate = rate;
+
+	/* HACK */
+	clk->parent->rate = clk->parent->recalc(clk->parent);
 
 	return 0;
 }
@@ -1181,12 +1209,13 @@ int __init omap2_clk_init(void)
 	for (c = omap34xx_clks; c < omap34xx_clks + ARRAY_SIZE(omap34xx_clks); c++)
 		clk_preinit(c->lk.clk);
 
-	for (c = omap34xx_clks; c < omap34xx_clks + ARRAY_SIZE(omap34xx_clks); c++)
+	for (c = omap34xx_clks; c < omap34xx_clks + ARRAY_SIZE(omap34xx_clks); c++) {
 		if (c->cpu & cpu_clkflg) {
 			clkdev_add(&c->lk);
 			clk_register(c->lk.clk);
 			omap2_init_clk_clkdm(c->lk.clk);
 		}
+        }
 
 	/* REVISIT: Not yet ready for OMAP3 */
 #if 0

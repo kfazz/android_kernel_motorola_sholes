@@ -247,37 +247,6 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key, int rw)
 		return 0;
 	}
 
-	/*
-	 * The futex is hashed differently depending on whether
-	 * it's in a shared or private mapping.  So check vma first.
-	 */
-	vma = find_extend_vma(mm, address);
-	if (unlikely(!vma))
-		return -EFAULT;
-
-	/*
-	 * Permissions.
-	 */
-	if (unlikely((vma->vm_flags & (VM_IO|VM_READ)) != VM_READ))
-		return (vma->vm_flags & VM_IO) ? -EPERM : -EACCES;
-
-	/*
-	 * Private mappings are handled in a simple way.
-	 *
-	 * NOTE: When userspace waits on a MAP_SHARED mapping, even if
-	 * it's a read-only handle, it's expected that futexes attach to
-	 * the object not the particular process.  Therefore we use
-	 * VM_MAYSHARE here, not VM_SHARED which is restricted to shared
-	 * mappings of _writable_ handles.
-	 */
-	if (likely(!(vma->vm_flags & VM_MAYSHARE))) {
-		key->both.offset |= FUT_OFF_MMSHARED; /* reference taken on mm */
-		key->private.mm = mm;
-		key->private.address = address;
-		get_futex_key_refs(key);
-		return 0;
-	}
-
 again:
 	err = get_user_pages_fast(address, 1, 1, &page);
 	/*

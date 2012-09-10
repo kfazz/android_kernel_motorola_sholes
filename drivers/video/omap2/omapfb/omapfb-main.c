@@ -42,7 +42,7 @@
 #define OMAPFB_PLANE_YRES_MIN		8
 
 static char *def_mode;
-static char *def_vram;
+static char *def_vram = "0:4M";
 static int def_vrfb;
 static int def_rotate;
 static int def_mirror;
