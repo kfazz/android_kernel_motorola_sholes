@@ -234,6 +234,7 @@ struct hp3a_statistics {
 	u32 frame_id;
 	u32 exposure;
 	u16 gain;
+	u16 fps;
 	u16 raw_width;
 	u16 raw_height;
 	int hist_stat_index;
@@ -246,7 +247,8 @@ struct hp3a_statistics {
  * context specific data.
  **/
 struct hp3a_context {
-	int initialized;
+	u8 initialized;
+	u8 hw_initialized;
 	int default_v4l2_dev;
 	int v4l2_streaming;
 	int update_hardpipe;
@@ -381,6 +383,5 @@ int hp3a_read_ispreg_to_user(struct hp3a_reg *user_reg);
  * External global task data.
  **/
 extern struct hp3a_context g_tc;
-extern struct work_struct g_hp3a_work_queue;
 
 #endif	/* __HP3A_COMMON_H_INCLUDED */

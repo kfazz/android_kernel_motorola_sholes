@@ -349,6 +349,7 @@ struct af_configuration {
 #define ISP_ABS_CCDC_COLPTN		(1 << 6)
 #define ISP_ABS_CCDC_CONFIG_LSC		(1 << 7)
 #define ISP_ABS_TBL_LSC			(1 << 8)
+#define ISP_ABS_CCDC_DCSUB		(1 << 9)
 
 #define RGB_MAX				3
 
@@ -494,6 +495,7 @@ struct ispccdc_update_config {
 	struct ispccdc_culling *cull;
 	__u32 colptn;
 	__u8 *lsc;
+	__u32 dcsub;
 };
 
 /* Preview configuration */

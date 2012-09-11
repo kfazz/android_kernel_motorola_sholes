@@ -25,6 +25,9 @@
 #include <plat/mux.h>
 #include <plat/board-sholes.h>
 #include <plat/omap-pm.h>
+#include <plat/control.h>
+#include <linux/string.h>
+#include <plat/resource.h>
 
 #if defined(CONFIG_VIDEO_OMAP3)
 #include <media/v4l2-int-device.h>
@@ -49,6 +52,9 @@
 
 static void sholes_camera_lines_safe_mode(void);
 static void sholes_camera_lines_func_mode(void);
+static enum v4l2_power previous_power = V4L2_POWER_OFF;
+#define MPU_LATENCY_C1          15
+//#define OMAP_MCAM_SRC_DIV		    4 //was 2
 
 #ifdef CONFIG_VIDEO_OMAP3_HPLENS
 static int hplens_power_set(enum v4l2_power power)
@@ -85,66 +91,42 @@ static struct omap34xxcam_sensor_config mt9p012_cam_hwc = {
 static int mt9p012_sensor_set_prv_data(void *priv)
 {
 	struct omap34xxcam_hw_config *hwc = priv;
-#if defined(CONFIG_VIDEO_OLDOMAP3)
 	hwc->u.sensor.xclk = mt9p012_cam_hwc.xclk;
 	hwc->u.sensor.sensor_isp = mt9p012_cam_hwc.sensor_isp;
 	hwc->u.sensor.capture_mem = mt9p012_cam_hwc.capture_mem;
 	hwc->dev_index = 0;
 	hwc->dev_minor = 0;
 	hwc->dev_type = OMAP34XXCAM_SLAVE_SENSOR;
-	hwc->interface_type = ISP_PARLL;
-#else
-	hwc->u.sensor.xclk = mt9p012_cam_hwc.xclk;
-	hwc->u.sensor.sensor_isp = mt9p012_cam_hwc.sensor_isp;
-	hwc->dev_index = 0;
-	hwc->dev_minor = 0;
-	hwc->dev_type = OMAP34XXCAM_SLAVE_SENSOR;
-#endif
 	return 0;
 }
 
 static struct isp_interface_config mt9p012_if_config = {
-#if defined(CONFIG_VIDEO_OLDOMAP3)
 	.ccdc_par_ser = ISP_PARLL,
 	.dataline_shift = 0x1,
 	.hsvs_syncdetect = ISPCTRL_SYNC_DETECT_VSRISE,
-	.vdint0_timing = 0x0,
-	.vdint1_timing = 0x0,
 	.strobe = 0x0,
 	.prestrobe = 0x0,
 	.shutter = 0x0,
 	.wenlog = ISPCCDC_CFG_WENLOG_OR,
+	.wait_bayer_frame = 0,
+	.wait_yuv_frame = 1,
 	.dcsub = 42,
-	.raw_fmt_in = ISPCCDC_INPUT_FMT_GR_BG,
-	.wbal.coef0 = 0x23,
-	.wbal.coef1 = 0x20,
-	.wbal.coef2 = 0x20,
-	.wbal.coef3 = 0x30,
-	.u.par.par_bridge = 0x0,
-	.u.par.par_clk_pol = 0x0,
-#else
-	.ccdc_par_ser = ISP_PARLL,
-	.dataline_shift 	= 0x1,
-	.hsvs_syncdetect 	= ISPCTRL_SYNC_DETECT_VSRISE,
-	.strobe 		= 0x0,
-	.prestrobe 		= 0x0,
-	.shutter 		= 0x0,
-	.wenlog = ISPCCDC_CFG_WENLOG_OR,
-	.wait_hs_vs = 1,
+	.cam_mclk = 432000000,
+	.cam_mclk_src_div = 2,
 	.raw_fmt_in = ISPCCDC_INPUT_FMT_GR_BG,
 	.u.par.par_bridge = 0x0,
 	.u.par.par_clk_pol = 0x0,
-#endif
+
 };
 
 static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 {
-	static enum v4l2_power previous_power = V4L2_POWER_OFF;
 	static struct regulator *regulator;
-
+	int error = 0;
 	switch (power) {
 	case V4L2_POWER_OFF:
 		/* Power Down Sequence */
+		gpio_direction_output(GPIO_MT9P012_RESET, 0);
 		gpio_free(GPIO_MT9P012_RESET);
 
 		/* Turn off power */
@@ -161,6 +143,7 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 
 		/* Release pm constraints */
 		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
+		omap_pm_set_max_mpu_wakeup_lat(dev, -1);
 		sholes_camera_lines_safe_mode();
 	break;
 	case V4L2_POWER_ON:
@@ -171,15 +154,18 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 			/* Set min throughput to:
 			 *  2592 x 1944 x 2bpp x 30fps x 3 L3 accesses */
 			omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 885735);
+			/* Hold a constraint to keep MPU in C1 */
+			omap_pm_set_max_mpu_wakeup_lat(dev, MPU_LATENCY_C1);
 
-			/* Configure pixel clock divider (here?) */
-			omap_writel(0x2, 0x48004f40);
+			/* Configure ISP */
 			isp_configure_interface(&mt9p012_if_config);
 
 			/* Request and configure gpio pins */
 			if (gpio_request(GPIO_MT9P012_RESET,
-						"mt9p012 camera reset") != 0)
-				return -EIO;
+						"mt9p012 camera reset") != 0) {
+				error = -EIO;
+				goto out;
+			}
 
 			/* set to output mode */
 			gpio_direction_output(GPIO_MT9P012_RESET, 0);
@@ -197,14 +183,16 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 					pr_err("%s: Cannot get vcam "\
 						"regulator, err=%ld\n",
 						__func__, PTR_ERR(regulator));
-					return PTR_ERR(regulator);
+					error = PTR_ERR(regulator);
+					goto out;
 				}
 			}
 
 			if (regulator_enable(regulator) != 0) {
 				pr_err("%s: Cannot enable vcam regulator\n",
 						__func__);
-				return -EIO;
+				error = -EIO;
+				goto out;
 			}
 		}
 
@@ -226,6 +214,11 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 			udelay(300);
 		}
 		break;
+out:
+		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
+		omap_pm_set_max_mpu_wakeup_lat(dev, -1);
+		sholes_camera_lines_safe_mode();
+		return error;
 	case V4L2_POWER_STANDBY:
 		/* Stand By Sequence */
 		break;
