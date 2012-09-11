@@ -73,7 +73,7 @@ static struct omapfb_platform_data sholes_fb_data = {
 static struct omap_dss_device sholes_lcd_device = {
 	.type = OMAP_DISPLAY_TYPE_DSI,
 	.name = "lcd",
-	.driver_name = "sholes-panel",
+	.driver_name = "mapphone-panel",
 	.phy.dsi.clk_lane = 1,
 	.phy.dsi.clk_pol = 0,
 	.phy.dsi.data1_lane = 2,
@@ -88,6 +88,8 @@ static struct omap_dss_device sholes_lcd_device = {
 	.phy.dsi.div.pck_div = 4,
 	.phy.dsi.div.lp_clk_div = 5,
 	.reset_gpio = SHOLES_DISPLAY_RESET_GPIO,
+	.phy.dsi.xfer_mode = OMAP_DSI_XFER_CMD_MODE,
+	.panel.panel_id = 0x000a0001,
 	.platform_enable = sholes_panel_enable,
 	.platform_disable = sholes_panel_disable,
 };
@@ -108,6 +110,11 @@ struct platform_device sholes_dss_device = {
         .dev            = {
                 .platform_data = &sholes_dss_data,
         },
+};
+
+static struct platform_device omap_panel_device = {
+	.name = "omap-panel",
+	.id = -1,
 };
 
 void __init sholes_panel_init(void)
@@ -131,6 +138,7 @@ void __init sholes_panel_init(void)
 		goto error;
 	}
 
+	platform_device_register(&omap_panel_device);
 	platform_device_register(&sholes_dss_device);
 	return;
 
