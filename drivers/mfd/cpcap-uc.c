@@ -127,7 +127,7 @@ static void ram_read_state_machine(enum cpcap_irqs irq, void *data)
 		cpcap_regacc_write(uc_data->cpcap, CPCAP_REG_MT3, 0, 0xFFFF);
 
 		if (uc_data->cpcap->vendor == CPCAP_VENDOR_ST)
-		uc_data->state = READ_STATE_2;
+			uc_data->state = READ_STATE_2;
 		else
 			uc_data->state = READ_STATE_3;
 
@@ -368,8 +368,8 @@ static int ram_write(struct cpcap_uc_data *uc_data, unsigned short address,
 		INIT_COMPLETION(uc_data->completion);
 
 		retval = cpcap_regacc_write(uc_data->cpcap, CPCAP_REG_MI2,
-					    CPCAP_BIT_PRIRAMW,
-					    CPCAP_BIT_PRIRAMW);
+					CPCAP_BIT_PRIRAMW,
+					CPCAP_BIT_PRIRAMW);
 		if (retval)
 			goto err;
 
@@ -617,7 +617,7 @@ int cpcap_uc_start(struct cpcap_device *cpcap, enum cpcap_macro macro)
 		     (macro == CPCAP_MACRO_12))) {
 			retval = cpcap_regacc_write(cpcap, CPCAP_REG_MI2,
 						    (1 << macro),
-					    (1 << macro));
+						    (1 << macro));
 		} else {
 			retval = cpcap_regacc_write(cpcap, CPCAP_REG_MIM1,
 						    0, (1 << macro));
@@ -658,10 +658,10 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 		if ((macro <= CPCAP_MACRO_4) ||
 		    ((cpcap->vendor == CPCAP_VENDOR_ST) &&
 		     (macro == CPCAP_MACRO_12))) {
-		cpcap_regacc_read(cpcap, CPCAP_REG_MI2, &regval);
+			cpcap_regacc_read(cpcap, CPCAP_REG_MI2, &regval);
 
-		if (regval & (1 << macro))
-			retval = 1;
+			if (regval & (1 << macro))
+				retval = 1;
 		} else {
 			cpcap_regacc_read(cpcap, CPCAP_REG_MIM1, &regval);
 
@@ -673,6 +673,20 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 	return retval;
 }
 EXPORT_SYMBOL_GPL(cpcap_uc_status);
+
+#ifdef CONFIG_PM_DBG_DRV
+int cpcap_uc_ram_write(struct cpcap_device *cpcap, unsigned short address,
+		     unsigned short num_words, unsigned short *data)
+{
+	return ram_write(cpcap->ucdata, address, num_words, data);
+}
+
+int cpcap_uc_ram_read(struct cpcap_device *cpcap, unsigned short address,
+		    unsigned short num_words, unsigned short *data)
+{
+	return ram_read(cpcap->ucdata, address, num_words, data);
+}
+#endif /* CONFIG_PM_DBG_DRV */
 
 static int fw_load(struct cpcap_uc_data *uc_data, struct device *dev)
 {
@@ -694,7 +708,7 @@ static int fw_load(struct cpcap_uc_data *uc_data, struct device *dev)
 	if (uc_data->cpcap->vendor == CPCAP_VENDOR_ST)
 		err = request_ihex_firmware(&fw, "cpcap/firmware_0_2x.fw", dev);
 	else
-	err = request_ihex_firmware(&fw, "cpcap/firmware_1_2x.fw", dev);
+		err = request_ihex_firmware(&fw, "cpcap/firmware_1_2x.fw", dev);
 
 	if (err) {
 		dev_err(dev, "Failed to load \"cpcap/firmware_%d_2x.fw\": %d\n",

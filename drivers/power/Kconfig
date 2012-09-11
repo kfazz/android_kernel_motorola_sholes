@@ -122,4 +122,10 @@ config BATTERY_CPCAP
 	help
 	 Say Y to include support for CPCAP Main Battery.
 
+config PM_DBG_DRV
+	tristate "PM DBG Driver"
+	depends on MFD_CPCAP
+	help
+	 Say Y to include support for PM debug and profile tracer.
+
 endif # POWER_SUPPLY

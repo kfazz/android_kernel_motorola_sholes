@@ -705,5 +705,16 @@ int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
+
+#ifdef CONFIG_PM_DBG_DRV
+void cpcap_irq_pm_dbg_suspend(void);
+void cpcap_irq_pm_dbg_resume(void);
+int cpcap_uc_ram_write(struct cpcap_device *cpcap, unsigned short address,
+                    unsigned short num_words, unsigned short *data);
+
+int cpcap_uc_ram_read(struct cpcap_device *cpcap, unsigned short address,
+                   unsigned short num_words, unsigned short *data);
+#endif /* CONFIG_PM_DBG_DRV */
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SPI_CPCAP_H */
