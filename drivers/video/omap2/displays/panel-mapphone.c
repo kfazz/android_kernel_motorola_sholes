@@ -94,10 +94,10 @@ static struct omap_video_timings mapphone_panel_timings = {
 	/*.pixel_clock  = 25000,*/
 	.dsi1_pll_fclk	= 100000,
 	.dsi2_pll_fclk  = 100000,
-	.hfp            = 0,
+	.hfp            = 44, //was 0
 	.hsw            = 2,
-	.hbp            = 2,
-	.vfp            = 0,
+	.hbp            = 38, //was 2 
+	.vfp            = 1,  //was 0
 	.vsw            = 1,
 	.vbp            = 1,
 	/* defaults for dpi. overide in device_tree.xml only if required on product basis */
