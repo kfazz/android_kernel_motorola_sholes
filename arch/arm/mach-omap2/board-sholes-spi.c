@@ -423,4 +423,6 @@ void __init sholes_spi_init(void)
 			       ARRAY_SIZE(sholes_spi_board_info));
 
 	regulator_has_full_constraints();
+
+
 }

@@ -23,6 +23,8 @@
 #include <linux/workqueue.h>
 #include <linux/completion.h>
 #include <linux/power_supply.h>
+#include <linux/platform_device.h>
+
 #endif
 
 #define CPCAP_DEV_NAME "cpcap"
@@ -707,6 +709,10 @@ unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
 
 #ifdef CONFIG_PM_DBG_DRV
+
+int cpcap_device_register(struct platform_device *pdev);
+int cpcap_device_unregister(struct platform_device *pdev);
+
 void cpcap_irq_pm_dbg_suspend(void);
 void cpcap_irq_pm_dbg_resume(void);
 int cpcap_uc_ram_write(struct cpcap_device *cpcap, unsigned short address,

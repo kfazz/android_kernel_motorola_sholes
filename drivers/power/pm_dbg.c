@@ -644,7 +644,7 @@ static int pm_dbg_probe(struct platform_device *pdev)
 {
 	int retval = 0;
 	struct pm_dbg_data *data;
-	struct pm_dbg_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct pm_dbg_drvdata *drvdata = pdev->dev.platform_data; //platform_get_drvdata(pdev);
 
 	if (pdev->dev.platform_data == NULL) {
 		dev_err(&pdev->dev, "no platform_data\n");
@@ -711,7 +711,7 @@ err_irq:
 
 static int __exit pm_dbg_remove(struct platform_device *pdev)
 {
-	struct pm_dbg_data *data = platform_get_drvdata(pdev);
+	struct pm_dbg_data *data = pdev->dev.platform_data; //platform_get_drvdata(pdev);
 
 	device_remove_file(&pdev->dev, &dev_attr_factor);
 	device_remove_file(&pdev->dev, &dev_attr_control);
@@ -726,7 +726,7 @@ static int __exit pm_dbg_remove(struct platform_device *pdev)
 static int pm_dbg_suspend(struct platform_device *pdev,
 				 pm_message_t state)
 {
-	struct pm_dbg_data *data = platform_get_drvdata(pdev);
+	struct pm_dbg_data *data = pdev->dev.platform_data; //platform_get_drvdata(pdev);
 
 	if (data->macro_meas_enable != 0)
 		data_update(data, IDLE_MACRO_START);
@@ -741,7 +741,7 @@ static int pm_dbg_suspend(struct platform_device *pdev,
 
 static int pm_dbg_resume(struct platform_device *pdev)
 {
-	struct pm_dbg_data *data = platform_get_drvdata(pdev);
+	struct pm_dbg_data *data = pdev->dev.platform_data; //platform_get_drvdata(pdev);
 
 	if (data->suspend_meas_enable != 0)
 		data_update(data, IDLE_STOP);
