@@ -4,6 +4,7 @@
 #include <linux/tty_flip.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
+#include <linux/slab.h>
 
 #include "ts27010_mux.h"
 #include "ts27010_ringbuf.h"
