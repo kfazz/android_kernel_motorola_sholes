@@ -33,6 +33,7 @@
 #include <linux/wl127x-rfkill.h>
 #include <linux/wl127x-test.h>
 #include <linux/omap_mdm_ctrl.h>
+#include <linux/spi/cpcap.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -53,6 +54,8 @@
 #include <mach/system.h>
 #include <linux/usb/android_composite.h>
 #include <linux/wakelock.h>
+
+#include <linux/pm_dbg.h>
 
 #include "cm-regbits-34xx.h"
 #include "pm.h"
@@ -1917,6 +1920,23 @@ static void __init sholes_power_off_init(void)
 	platform_driver_register(&cpcap_charger_connected_driver);
 }
 
+#ifdef CONFIG_PM_DBG_DRV
+
+static struct pm_dbg_drvdata cpcap_pm_dbg_drvdata = {
+	.pm_cd_factor = 1000,
+};
+
+static struct platform_device cpcap_pm_dbg_device = {
+	.name		= "cpcap_pm_dbg",
+	.id		= -1,
+	.dev		= {
+		.platform_data = NULL,
+	},
+};
+
+
+#endif
+
 static void __init sholes_init(void)
 {
 	int ret = 0;
@@ -1960,6 +1980,12 @@ static void __init sholes_init(void)
 	sholes_sgx_init();
 	sholes_power_off_init();
 	sholes_gadget_init();
+
+#ifdef CONFIG_PM_DBG_DRV
+	cpcap_device_register(&cpcap_pm_dbg_device);
+	platform_set_drvdata(&cpcap_pm_dbg_device, &cpcap_pm_dbg_drvdata);
+#endif
+
 }
 
 static void __init sholes_map_io(void)

@@ -29,6 +29,11 @@
 #include <linux/notifier.h>
 #include <linux/delay.h>
 
+struct cpcap_driver_info {
+	struct list_head list;
+	struct platform_device *pdev;
+};
+
 static int ioctl(struct inode *inode,
 		 struct file *file, unsigned int cmd, unsigned long arg);
 static int __devinit cpcap_probe(struct spi_device *spi);
@@ -166,6 +171,10 @@ static struct platform_device *cpcap_devices[] = {
 
 static struct cpcap_device *misc_cpcap;
 
+static LIST_HEAD(cpcap_device_list);
+static DEFINE_MUTEX(cpcap_driver_lock);
+
+
 static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 			void *cmd)
 {
@@ -299,6 +308,85 @@ static void cpcap_vendor_read(struct cpcap_device *cpcap)
 						((value << 3) & 0x0038));
 }
 
+int cpcap_device_unregister(struct platform_device *pdev)
+{
+	struct cpcap_driver_info *info;
+	struct cpcap_driver_info *tmp;
+	int found;
+
+
+	found = 0;
+	mutex_lock(&cpcap_driver_lock);
+
+	list_for_each_entry_safe(info, tmp, &cpcap_device_list, list) {
+		if (info->pdev == pdev) {
+			list_del(&info->list);
+
+			/*
+			 * misc_cpcap != NULL suggests pdev
+			 * already registered
+			 */
+			if (misc_cpcap) {
+				printk(KERN_INFO "CPCAP: unregister %s\n",
+					pdev->name);
+				platform_device_unregister(pdev);
+			}
+			info->pdev = NULL;
+			kfree(info);
+			found = 1;
+		}
+	}
+
+	mutex_unlock(&cpcap_driver_lock);
+
+	BUG_ON(!found);
+	return 0;
+}
+
+int cpcap_device_register(struct platform_device *pdev)
+{
+	int retval;
+	struct cpcap_driver_info *info;
+
+	retval = 0;
+
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info) {
+		printk(KERN_ERR	"Cannot save device %s\n", pdev->name);
+		return -ENOMEM;
+	}
+
+	mutex_lock(&cpcap_driver_lock);
+
+	info->pdev = pdev;
+	list_add_tail(&info->list, &cpcap_device_list);
+
+	/* If misc_cpcap is valid, the CPCAP driver has already been probed.
+	 * Therefore, call platform_device_register() to probe the device.
+	 */
+	if (misc_cpcap) {
+		dev_info(&(misc_cpcap->spi->dev),
+			 "Probing CPCAP device %s\n", pdev->name);
+
+		/*
+		 * platform_data is non-empty indicates
+		 * CPCAP client devices need to pass their own data
+		 * In that case we put cpcap data in driver_data
+		 */
+		if (pdev->dev.platform_data != NULL)
+			platform_set_drvdata(pdev, misc_cpcap);
+		else
+			pdev->dev.platform_data = misc_cpcap;
+		retval = platform_device_register(pdev);
+	} else
+		printk(KERN_INFO "CPCAP: delaying %s probe\n",
+				pdev->name);
+	mutex_unlock(&cpcap_driver_lock);
+
+	return retval;
+}
+
+
 
 static int __devinit cpcap_probe(struct spi_device *spi)
 {
@@ -306,6 +394,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	struct cpcap_device *cpcap;
 	struct cpcap_platform_data *data;
 	int i;
+	struct cpcap_driver_info *info;
 
 	cpcap = kzalloc(sizeof(*cpcap), GFP_KERNEL);
 	if (cpcap == NULL)
@@ -314,7 +403,7 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 	cpcap->spi = spi;
 	data = spi->controller_data;
 
-	misc_cpcap = cpcap;  /* kept for misc device */
+	//misc_cpcap = cpcap;  /* kept for misc device */
 	spi_set_drvdata(spi, cpcap);
 
 	retval = cpcap_regacc_init(cpcap);
@@ -372,6 +461,22 @@ static int __devinit cpcap_probe(struct spi_device *spi)
 
 	platform_add_devices(cpcap_devices, ARRAY_SIZE(cpcap_devices));
 
+       mutex_lock(&cpcap_driver_lock);
+       misc_cpcap = cpcap;  /* kept for misc device */
+
+       list_for_each_entry(info, &cpcap_device_list, list) {
+               int ret = 0;
+               dev_info(&(spi->dev), "Probing CPCAP device %s\n",
+                        info->pdev->name);
+               if (info->pdev->dev.platform_data != NULL)
+                       platform_set_drvdata(info->pdev, cpcap);
+               else
+                       info->pdev->dev.platform_data = cpcap;
+               ret = platform_device_register(info->pdev);
+       }
+       mutex_unlock(&cpcap_driver_lock);
+
+
 	register_reboot_notifier(&cpcap_reboot_notifier);
 
 	return 0;
@@ -386,9 +491,20 @@ free_mem:
 static int __devexit cpcap_remove(struct spi_device *spi)
 {
 	struct cpcap_device *cpcap = spi_get_drvdata(spi);
+	struct cpcap_driver_info *info;
 	int i;
 
 	unregister_reboot_notifier(&cpcap_reboot_notifier);
+
+        mutex_lock(&cpcap_driver_lock);
+        list_for_each_entry(info, &cpcap_device_list, list) {
+                dev_info(&(spi->dev), "Removing CPCAP device %s\n",
+                         info->pdev->name);
+                platform_device_unregister(info->pdev);
+        }
+        misc_cpcap = NULL;
+        mutex_unlock(&cpcap_driver_lock);
+
 
 	for (i = ARRAY_SIZE(cpcap_devices); i > 0; i--)
 		platform_device_unregister(cpcap_devices[i-1]);
