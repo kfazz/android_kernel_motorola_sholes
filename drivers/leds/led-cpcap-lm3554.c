@@ -378,10 +378,10 @@ static int lm3554_probe(struct i2c_client *client,
 		goto error1;
 	}
 
-	if (!pdata->flags) {
+	/*if (!pdata->flags) {
 		pr_err("%s: Device does not exist\n", __func__);
 		return -ENODEV;
-	}
+	}*/
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		err = -ENODEV;

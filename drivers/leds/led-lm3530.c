@@ -35,8 +35,8 @@
 static int pwm_disable_manual = 0;
 static int pwm_disable_auto = 0;
 
-int als_resistor_val[16] = {1, 9260, 4630, 3090, 2310,
-1850, 1540, 1320, 1160, 1030, 925, 842, 772, 712, 661, 617};
+int als_resistor_val[16] = {1, 13531, 9011, 5411, 2271, 1946, 1815, 1600, 1138,
+				1050, 1011, 941, 759, 719, 700, 667};
 
 struct lux_data {
 	int lux_value;

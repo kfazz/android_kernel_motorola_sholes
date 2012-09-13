@@ -31,20 +31,18 @@ obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
 obj-$(CONFIG_LEDS_PWM)			+= leds-pwm.o
 obj-$(CONFIG_LEDS_BD7885)               += leds-bd7885.o
 obj-$(CONFIG_LEDS_BU9847)               += leds-bu9847.o
-obj-$(CONFIG_LEDS_AF_LED)		+= leds-ld-cpcap-afled.o
 
 # LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
-obj-$(CONFIG_LEDS_SHOLES)		+= leds-ld-cpcap-disp.o \
-					   leds-ld-cpcap-rgb.o \
-					   leds-ld-cpcap-kpad.o
 obj-$(CONFIG_KEYBOARD_ADP5588)          += leds-ld-adp5588-kpad.o
 obj-$(CONFIG_LEDS_LM3530)		+= led-lm3530.o
 obj-$(CONFIG_LEDS_LM3554)		+= led-cpcap-lm3554.o
 obj-$(CONFIG_LEDS_LM3559)		+= led-cpcap-lm3559.o
-obj-$(CONFIG_LEDS_BUTTON)		+= leds-cpcap-button.o
-obj-$(CONFIG_LEDS_DISPLAY)		+= leds-cpcap-display.o
-obj-$(CONFIG_LEDS_KPAD)			+= leds-cpcap-kpad.o
+obj-$(CONFIG_LEDS_CPCAP)		+= leds-cpcap-adb.o \
+					   leds-cpcap-gpio.o \
+					   leds-cpcap-kpb.o \
+					   leds-cpcap-mdb.o \
+					   leds-cpcap-rgb.o
 
 # LED Triggers
 obj-$(CONFIG_LEDS_TRIGGER_TIMER)	+= ledtrig-timer.o

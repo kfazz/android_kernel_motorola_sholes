@@ -17,17 +17,20 @@
  */
 
 #include <linux/leds.h>
-#include <linux/leds-ld-cpcap.h>
 #include <linux/platform_device.h>
-#include <linux/adp5588_keypad.h>
+#include <linux/i2c/adp5588.h>
+#include <linux/gpio.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
 
-#ifdef CONFIG_KEYBOARD_ADP5588
+#ifdef CONFIG_MOT_KEYBOARD_ADP5588
 #include <linux/adp5588_keypad.h>
 #endif
+
+#define ADP5588_GPIO_LED1 230
+#define ADP5588_GPIO_LED2 231
 
 static void ld_adp5588_kpad_store(struct led_classdev *led_cdev,
 			enum led_brightness brightness);
@@ -76,6 +79,24 @@ static struct early_suspend early_suspend_data = {
     .resume = ld_adp5588_kpad_late_resume,
 };
 #endif
+
+static int leds_mask;
+
+/* SET backlight drive register. Bit0=EL_EN1, Bit1=EL_EN2 */
+static int adp5588_set_backlight(uint8_t mask)
+{
+	gpio_set_value(ADP5588_GPIO_LED1, mask & 0x01);
+	gpio_set_value(ADP5588_GPIO_LED2, mask & 0x02);
+
+	leds_mask = mask;
+	return 0;
+}
+
+/* GET backlight drive register value. Bit0=EL_EN1, Bit1=EL_EN2 */
+static int adp5588_get_backlight(void)
+{
+	return leds_mask;
+}
 
 /* This function is called by led_update_brightness() in leds class driver
    upon a write onto /sys/class/leds/keyboard-backlight
@@ -173,6 +194,7 @@ static int ld_adp5588_kpad_remove(struct platform_device *pdev)
 
 static int ld_adp5588_kpad_probe(struct platform_device *pdev)
 {
+	int ret;
 	struct adp5588_leds_platform_data *pdata = pdev->dev.platform_data;
 
 	if (!pdata->use_leds) {
@@ -182,6 +204,17 @@ static int ld_adp5588_kpad_probe(struct platform_device *pdev)
 	}
 
 	ld_adp5588_kpad_register(&pdev->dev);
+
+	ret = gpio_request(ADP5588_GPIO_LED1, "adp5588-led1");
+	ret |= gpio_request(ADP5588_GPIO_LED2, "adp5588-led2");
+
+	if (ret) {
+		printk(KERN_ERR "ADP5588 gpio_request ret = %d\n", ret);
+		return -ENODEV;
+	}
+
+	gpio_direction_output(ADP5588_GPIO_LED1, 0);
+	gpio_direction_output(ADP5588_GPIO_LED2, 0);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	register_early_suspend(&early_suspend_data);

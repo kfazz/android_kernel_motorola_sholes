@@ -225,10 +225,11 @@ static ssize_t ld_lm3559_registers_store(struct device *dev,
 		return -1;
 	}
 
-	if (sscanf(buf, "%s %x", name, &value) != 2) {
+	if (sscanf(buf, "%29s %x", name, &value) != 2) {
 		pr_err("%s:unable to parse input\n", __func__);
 		return -1;
 	}
+	name[sizeof(name)-1] = '\0';
 
 	reg_count = sizeof(lm3559_regs) / sizeof(lm3559_regs[0]);
 	for (i = 0; i < reg_count; i++) {
@@ -428,7 +429,7 @@ static void lm3559_spot_light_brightness_set(struct led_classdev *led_cdev,
 				__func__, LM3559_FLASH_DURATION, err);
 			return;
 		}
-    } else {
+	} else {
 
 		err = lm3559_read_reg(torch_data, LM3559_ENABLE_REG,
 			&val);
@@ -510,6 +511,17 @@ static ssize_t lm3559_strobe_store(struct device *dev,
 			return -EIO;
 		}
 
+		/* Flash driver will automatically switch from flash to torch mode
+		** if the flash driver is detecting low battery or getting a phone
+		** call. Need to have pre-defined torch brightness for this case */
+		err = lm3559_write_reg(torch_data, LM3559_TORCH_BRIGHTNESS,
+			torch_data->pdata->torch_brightness_def);
+		if (err) {
+			pr_err("%s: Writing to 0x%X failed %i\n",
+				__func__, LM3559_TORCH_BRIGHTNESS, err);
+			return -EIO;
+		}
+
 		err = lm3559_write_reg(torch_data, LM3559_ENABLE_REG,
 			torch_data->pdata->flash_enable_val);
 		if (err) {
@@ -525,7 +537,7 @@ static ssize_t lm3559_strobe_store(struct device *dev,
 				__func__, LM3559_FLASH_DURATION, err);
 			return -EIO;
 		 }
-    } else {
+	} else {
 		if (lm3559_debug)
 			pr_info("%s: strobe off \n", __func__);
 
@@ -673,7 +685,7 @@ static void set_rgb_brightness(struct lm3559_data *msg_ind_data,
 	if (value) {
 
 		if (lm3559_debug)
-			pr_info("%s:Turning off the message indicator\n",
+			pr_info("%s:Turning on the message indicator\n",
 			__func__);
 
 		err = lm3559_read_reg(msg_ind_data, LM3559_ENABLE_REG,
@@ -990,9 +1002,8 @@ static int lm3559_probe(struct i2c_client *client,
 		err = -ENODEV;
 		goto err_reg_register_file_failed;
 	}
-		pr_info("LM3559 torch initialized\n");
-	if (lm3559_debug)
-		pr_info("LM3559 torch initialized\n");
+	
+	pr_info("LM3559 torch initialized\n");
 
 	return 0;
 
@@ -1184,3 +1195,4 @@ module_exit(cpcap_lm3559_exit);
 
 MODULE_DESCRIPTION("Lighting driver for LM3559");
 MODULE_AUTHOR("MOTOROLA");
+MODULE_LICENSE("GPL");
