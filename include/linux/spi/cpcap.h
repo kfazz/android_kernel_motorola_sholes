@@ -487,6 +487,50 @@ struct cpcap_adc_ato {
 	unsigned short atox_ps_factor_out;
 };
 
+struct cpcap_display_led {
+       unsigned int display_reg;
+       unsigned int display_mask;
+       unsigned int display_on;
+       unsigned int display_off;
+       unsigned int display_init;
+       unsigned int poll_intvl;
+};
+
+struct cpcap_button_led {
+       unsigned int button_reg;
+       unsigned int button_mask;
+       unsigned int button_on;
+       unsigned int button_off;
+};
+
+struct cpcap_kpad_led {
+       unsigned int kpad_reg;
+       unsigned int kpad_mask;
+       unsigned int kpad_on;
+       unsigned int kpad_off;
+};
+
+struct cpcap_rgb_led {
+       unsigned int rgb_reg;
+       unsigned int rgb_mask;
+       unsigned int rgb_on;
+       unsigned int rgb_off;
+};
+struct cpcap_als_data {
+       unsigned short lux_max;
+       unsigned short lux_min;
+       unsigned short als_max;
+       unsigned short als_min;
+};
+
+struct cpcap_leds {
+       struct cpcap_display_led display_led;
+       struct cpcap_button_led button_led;
+       struct cpcap_kpad_led kpad_led;
+       struct cpcap_rgb_led rgb_led;
+       struct cpcap_als_data als_data;
+};
+
 struct cpcap_batt_data {
 	int status;
 	int health;
@@ -518,6 +562,7 @@ struct cpcap_platform_data {
 	unsigned short *regulator_off_mode_values;
 	struct regulator_init_data *regulator_init;
 	struct cpcap_adc_ato *adc_ato;
+        struct cpcap_leds *leds;
 
 	void (*ac_changed)(struct power_supply *,
 			   struct cpcap_batt_ac_data *);
@@ -525,7 +570,7 @@ struct cpcap_platform_data {
 			     struct cpcap_batt_data *);
 	void (*usb_changed)(struct power_supply *,
 			    struct cpcap_batt_usb_data *);
-unsigned short is_umts;
+	unsigned short is_umts;
 };
 
 struct cpcap_adc_request {
@@ -708,11 +753,18 @@ int cpcap_uc_stop(struct cpcap_device *cpcap, enum cpcap_macro macro);
 unsigned char cpcap_uc_status(struct cpcap_device *cpcap,
 			      enum cpcap_macro macro);
 
-#ifdef CONFIG_PM_DBG_DRV
+#if defined(CONFIG_LEDS_FLASH_RESET)
+int cpcap_direct_misc_write(unsigned short reg, unsigned short value,\
+                           unsigned short mask);
+#endif
+
+#define  cpcap_driver_register platform_driver_register
+#define  cpcap_driver_unregister platform_driver_unregister
 
 int cpcap_device_register(struct platform_device *pdev);
 int cpcap_device_unregister(struct platform_device *pdev);
 
+#ifdef CONFIG_PM_DBG_DRV
 void cpcap_irq_pm_dbg_suspend(void);
 void cpcap_irq_pm_dbg_resume(void);
 int cpcap_uc_ram_write(struct cpcap_device *cpcap, unsigned short address,

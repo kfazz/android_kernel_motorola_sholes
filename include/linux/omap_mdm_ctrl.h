@@ -27,12 +27,21 @@
 #define GPIO_INTERRUPT_COUNT   3
 
 struct omap_mdm_ctrl_platform_data {
+	int (*power_off)(void);
+	int (*power_up)(int);
+	int (*reset)(int);
+	unsigned int (*get_bp_status)(void);
+	void (*set_ap_status)(unsigned int);
 	unsigned int bp_ready_ap_gpio;
 	unsigned int bp_ready2_ap_gpio;
 	unsigned int bp_resout_gpio;
 	unsigned int bp_pwron_gpio;
 	unsigned int ap_to_bp_pshold_gpio;
 	unsigned int ap_to_bp_flash_en_gpio;
+	unsigned int ipc_usb_susp_gpio;
+	unsigned int ap_usb_bypass_gpio;
+	unsigned int ap_wake_bp_gpio;
+	unsigned int bp_wake_ap_gpio;
 };
 
 #endif  /* _LINUX_OMAP_MDM_CTRL_H__ */

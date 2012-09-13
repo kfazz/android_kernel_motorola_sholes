@@ -27,16 +27,29 @@ enum {
 };
 typedef unsigned short omap_mdm_ctrl_gpiomask;
 
+
 /* List of IOCtl commands */
 #define OMAP_MDM_CTRL_IOCTL_GET_BP_READY_AP       0x0001
 #define OMAP_MDM_CTRL_IOCTL_GET_BP_READY2_AP      0x0002
 #define OMAP_MDM_CTRL_IOCTL_GET_BP_RESOUT         0x0003
+/* surport mdm6600 */
+#define OMAP_MDM_CTRL_IOCTL_GET_BP_STATUS     0x0004
+
 #define OMAP_MDM_CTRL_IOCTL_SET_BP_PWRON          0x0010
 #define OMAP_MDM_CTRL_IOCTL_SET_AP_TO_BP_PSHOLD   0x0020
 #define OMAP_MDM_CTRL_IOCTL_SET_AP_TO_BP_FLASH_EN 0x0030
+/* surport mdm6600 */
+#define OMAP_MDM_CTRL_IOCTL_SET_AP_STATUS		0x0040
+
 #define OMAP_MDM_CTRL_IOCTL_SET_INT_BP_READY_AP   0x0100
 #define OMAP_MDM_CTRL_IOCTL_SET_INT_BP_READY2_AP  0x0200
 #define OMAP_MDM_CTRL_IOCTL_SET_INT_BP_RESOUT     0x0300
+
+/* surport mdm6600 */
+#define OMAP_MDM_CTRL_IOCTL_BP_SHUTDOWN		  0x1000
+#define OMAP_MDM_CTRL_IOCTL_BP_STARTUP		  0x2000
+#define OMAP_MDM_CTRL_IOCTL_BP_RESET		  0x3000
+
 
 /* List of Interrupt Options */
 #define OMAP_MDM_CTRL_IRQ_RISING   0x01

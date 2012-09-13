@@ -18,6 +18,8 @@
 
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <linux/leds-cpcap-display.h>
+#include <linux/leds-cpcap-button.h>
 #include <linux/leds-ld-cpcap.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/machine.h>
@@ -79,38 +81,6 @@ static struct platform_device cpcap_batt_device = {
 	.dev.platform_data = NULL,
 };
 
-struct platform_device cpcap_disp_button_led = {
-	.name		= LD_DISP_BUTTON_DEV,
-	.id		= -1,
-	.dev		= {
-		.platform_data  = NULL,
-	},
-};
-
-struct platform_device cpcap_rgb_led = {
-	.name		= LD_MSG_IND_DEV,
-	.id		= -1,
-	.dev		= {
-		.platform_data  = NULL,
-	},
-};
-
-struct platform_device cpcap_keypad_led = {
-	.name		= LD_KPAD_DEV,
-	.id		= -1,
-	.dev		= {
-		.platform_data  = NULL,
-	},
-};
-
-struct platform_device cpcap_lm3554 = {
-	.name		= "flash-torch",
-	.id		= -1,
-	.dev		= {
-		.platform_data  = NULL,
-	},
-};
-
 #ifdef CONFIG_CPCAP_USB
 static struct platform_device cpcap_usb_device = {
 	.name           = "cpcap_usb",
@@ -156,10 +126,6 @@ static struct platform_device *cpcap_devices[] = {
 	&cpcap_adc_device,
 	&cpcap_key_device,
 	&cpcap_batt_device,
-	&cpcap_disp_button_led,
-	&cpcap_rgb_led,
-	&cpcap_keypad_led,
-	&cpcap_lm3554,
 #ifdef CONFIG_CPCAP_USB
 	&cpcap_usb_device,
 	&cpcap_usb_det_device,

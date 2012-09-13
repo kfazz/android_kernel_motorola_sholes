@@ -1955,6 +1955,7 @@ static void __init sholes_init(void)
 	sholes_ramconsole_init();
 	sholes_omap_mdm_ctrl_init();
 	sholes_spi_init();
+	sholes_cpcap_client_init();
 	sholes_flash_init();
 	sholes_serial_init();
 	sholes_als_init();

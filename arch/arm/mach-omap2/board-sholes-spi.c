@@ -17,17 +17,13 @@
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/cpcap.h>
+#include <linux/leds-ld-cpcap.h>
 #include <linux/spi/spi.h>
 #include <plat/mcspi.h>
 #include <plat/gpio.h>
 #include <plat/mux.h>
 #include <plat/resource.h>
 #include <plat/omap34xx.h>
-
-#ifdef CONFIG_MFD_CPCAP
-extern struct platform_device cpcap_disp_button_led;
-extern struct platform_device cpcap_rgb_led;
-#endif
 
 struct cpcap_spi_init_data sholes_cpcap_spi_init[] = {
 	{CPCAP_REG_ASSIGN1,   0x0101},
@@ -100,10 +96,7 @@ unsigned short cpcap_regulator_mode_values[CPCAP_NUM_REGULATORS] = {
 #define REGULATOR_CONSUMER(name, device) { .supply = name, .dev = device, }
 
 struct regulator_consumer_supply cpcap_sw5_consumers[] = {
-#ifdef CONFIG_MFD_CPCAP
-	REGULATOR_CONSUMER("vdd_button_backlight", &cpcap_disp_button_led.dev),
-	REGULATOR_CONSUMER("vdd_notification_led", &cpcap_rgb_led.dev),
-#endif
+	REGULATOR_CONSUMER("sw5", NULL /* lighting_driver */),
 };
 
 struct regulator_consumer_supply cpcap_vcam_consumers[] = {
@@ -378,6 +371,40 @@ static void batt_changed(struct power_supply *batt,
 	}
 }
 
+static struct cpcap_leds mapphone_cpcap_leds = {
+	.display_led = {
+		.display_reg = CPCAP_REG_MDLC,
+		.display_mask = 0xFFFF,
+		.display_off = 0xFFFA,
+		.display_init = 0xB019,
+		.poll_intvl = 3000,
+	},
+	.button_led = {
+		.button_reg = CPCAP_REG_BLUEC,
+		.button_mask = 0x03FF,
+		.button_on = 0x00F5,
+		.button_off = 0x00F4,
+	},
+	.kpad_led = {
+		.kpad_reg = CPCAP_REG_KLC,
+		.kpad_mask = 0x7FFF,
+		.kpad_on = 0x5FF5,
+		.kpad_off = 0x5FF0,
+	},
+	/* To find LUX value from ALS data,
+	   below variables are used.
+	    * lux_max - LUX maximum value
+	    * lux_minimum - LUX minimum value
+	    * als_max - Maximum ALS data
+	    * als_min - Minimum ALS data */
+	.als_data = {
+		.lux_max = 5000,
+		.lux_min = 100,
+		.als_max = 590,
+		.als_min = 9,
+	},
+};
+
 static struct cpcap_platform_data sholes_cpcap_data = {
 	.init = sholes_cpcap_spi_init,
 	.init_len = ARRAY_SIZE(sholes_cpcap_spi_init),
@@ -385,6 +412,7 @@ static struct cpcap_platform_data sholes_cpcap_data = {
 	.regulator_init = cpcap_regulator,
 	.adc_ato = &sholes_cpcap_adc_ato,
 	.ac_changed = ac_changed,
+	.leds = &mapphone_cpcap_leds,
 	.batt_changed = batt_changed,
 	.usb_changed = NULL,
 };

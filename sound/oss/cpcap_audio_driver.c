@@ -237,7 +237,7 @@ static inline int is_output_changed(struct cpcap_audio_state *state,
 
 void cpcap_audio_state_dump(struct cpcap_audio_state *state)
 {
-	printk(KERN_DEBUG "---------Audio Driver State---------\n"
+	CPCAP_AUDIO_DEBUG_LOG( "---------Audio Driver State---------\n"
 		"   codec_mode = %d\n   codec_rate = %d\n"
 		"   codec_mute = %d\n   stdac_mode = %d\n"
 		"   stdac_rate = %d\n   stdac_mute = %d\n"
@@ -277,7 +277,7 @@ static void logged_cpcap_write(struct cpcap_device *cpcap, unsigned int reg,
 	if (mask != 0) {
 		int ret_val = 0;
 #ifdef CPCAP_AUDIO_SPI_LOG
-		printk(KERN_DEBUG
+		CPCAP_AUDIO_DEBUG_LOG(
 			"CPCAP_AUDIO_SPI_WRITE: reg %u, value 0x%x,mask 0x%x\n",
 		       CPCAP_REG_FOR_POWERIC_REG(reg), value, mask);
 #endif
@@ -289,11 +289,11 @@ static void logged_cpcap_write(struct cpcap_device *cpcap, unsigned int reg,
 #ifdef CPCAP_AUDIO_SPI_READBACK
 		ret_val = cpcap_regacc_read(cpcap, reg, &value);
 		if (ret_val == 0)
-			printk(KERN_DEBUG
+			CPCAP_AUDIO_DEBUG_LOG(
 				"CPCAP_AUDIO_SPI_VERIFY reg %u: value 0x%x \n",
 				CPCAP_REG_FOR_POWERIC_REG(reg), value);
 		else
-			printk(KERN_ERR
+			CPCAP_AUDIO_ERROR_LOG(
 				"CPCAP_AUDIO_SPI_VERIFY reg %u FAILED\n",
 				CPCAP_REG_FOR_POWERIC_REG(reg));
 #endif
@@ -1120,7 +1120,7 @@ static void cpcap_audio_configure_power(int power)
 			regulator_enable(audio_reg);
 			regulator_set_mode(audio_reg, REGULATOR_MODE_NORMAL);
 		} else {
-			printk(KERN_DEBUG "turning off regulator\n");
+			CPCAP_AUDIO_DEBUG_LOG( "turning off regulator\n");
 			regulator_set_mode(audio_reg, REGULATOR_MODE_STANDBY);
 			regulator_disable(audio_reg);
 		}
@@ -1151,8 +1151,8 @@ void cpcap_audio_register_dump(struct cpcap_audio_state *state)
 	cpcap_regacc_read(state->cpcap, CPCAP_REG_RXLL, &reg_val[i++]);
 	cpcap_regacc_read(state->cpcap, CPCAP_REG_A2LA, &reg_val[i++]);
 
-	printk(KERN_DEBUG "--------CPCAP register dump---------");
-	printk(KERN_DEBUG  " 0x200 (512) = %#x\n 0x201 (513) = %#x\n"
+	CPCAP_AUDIO_DEBUG_LOG( "--------CPCAP register dump---------");
+	CPCAP_AUDIO_DEBUG_LOG(  " 0x200 (512) = %#x\n 0x201 (513) = %#x\n"
 		" 0x202 (514) = %#x\n 0x203 (515) = %#x\n 0x204 (516) = %#x\n"
 		" 0x205 (517) = %#x\n 0x206 (518) = %#x\n 0x207 (519) = %#x\n"
 		" 0x208 (520) = %#x\n 0x209 (521) = %#x\n 0x20A (522) = %#x\n"

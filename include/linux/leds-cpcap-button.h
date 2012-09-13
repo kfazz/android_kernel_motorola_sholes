@@ -16,30 +16,9 @@
  * 02111-1307, USA
  */
 
-#ifndef _LINUX_LED_CPCAP_LM3554_H__
-#define _LINUX_LED_CPCAP_LM3554_H__
+#ifndef __LED_LD_CPCAP_BUTTON_H__
+#define __LED_LD_CPCAP_BUTTON_H__
 
-#define LM3554_LED_DEV "torch-flash"
-#define LM3554_LED_SPOTLIGHT "spotlight"
+#define CPCAP_BUTTON_DEV "button-backlight"
 
-#define LM3554_NAME "lm3554_led"
-
-
-
-#ifdef __KERNEL__
-
-struct lm3554_platform_data {
-	uint32_t flags;
-	u8 torch_brightness_def;
-	u8 flash_brightness_def;
-	u8 flash_duration_def;
-	u8 config_reg_1_def;
-	u8 config_reg_2_def;
-	u8 vin_monitor_def;
-	u8 gpio_reg_def;
-
-} __attribute__ ((packed));
-
-#endif	/* __KERNEL__ */
-
-#endif	/* _LINUX_LED_CPCAP_LM3554_H__ */
+#endif  /* __LED_LD_CPCAP_BUTTON_H__ */

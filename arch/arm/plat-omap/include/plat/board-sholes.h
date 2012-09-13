@@ -32,6 +32,7 @@
 #ifndef __ASM_ARCH_OMAP_SHOLES_H
 #define __ASM_ARCH_OMAP_SHOLES_H
 
+extern void sholes_cpcap_client_init(void);
 extern void sholes_usb_init(void);
 extern void sholes_flash_init(void);
 extern void sholes_panel_init(void);
