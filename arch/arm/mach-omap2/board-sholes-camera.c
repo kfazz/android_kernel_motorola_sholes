@@ -111,13 +111,20 @@ static struct isp_interface_config mt9p012_if_config = {
 	.wait_bayer_frame = 0,
 	.wait_yuv_frame = 1,
 	.dcsub = 42,
-	.cam_mclk = 432000000,
-	.cam_mclk_src_div = 2,
+	.cam_mclk = 144000000,
+	.cam_mclk_src_div = 6,
 	.raw_fmt_in = ISPCCDC_INPUT_FMT_GR_BG,
 	.u.par.par_bridge = 0x0,
 	.u.par.par_clk_pol = 0x0,
 
 };
+
+u32 mt9p012_set_xclk(u32 xclkfreq)
+{
+	return isp_set_xclk(xclkfreq, OMAP34XXCAM_XCLK_A);
+}
+
+#define MT9P012_XCLK_48MHZ		48000000
 
 static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 {
@@ -128,6 +135,7 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 		/* Power Down Sequence */
 		gpio_direction_output(GPIO_MT9P012_RESET, 0);
 		gpio_free(GPIO_MT9P012_RESET);
+		mt9p012_set_xclk(0);
 
 		/* Turn off power */
 		if (regulator != NULL) {
@@ -196,7 +204,9 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 			}
 		}
 
-		udelay(1000);
+		mt9p012_set_xclk(MT9P012_XCLK_48MHZ);
+		msleep(3);
+		//udelay(1000);
 
 		if (previous_power == V4L2_POWER_OFF) {
 			/* trigger reset */
@@ -215,6 +225,7 @@ static int mt9p012_sensor_power_set(struct device *dev, enum v4l2_power power)
 		}
 		break;
 out:
+		mt9p012_set_xclk(0);
 		omap_pm_set_min_bus_tput(dev, OCP_INITIATOR_AGENT, 0);
 		omap_pm_set_max_mpu_wakeup_lat(dev, -1);
 		sholes_camera_lines_safe_mode();
@@ -228,28 +239,40 @@ out:
 	return 0;
 }
 
-u32 mt9p012_set_xclk(u32 xclkfreq)
+static void sholes_lock_cpufreq(int lock)
 {
-	return isp_set_xclk(xclkfreq, OMAP34XXCAM_XCLK_A);
+	static struct device ov_dev;
+	static int flag;
+
+	if (lock == 1) {
+		resource_request("vdd1_opp",
+			&ov_dev, omap_pm_get_max_vdd1_opp());
+		flag = 1;
+	} else {
+		if (flag == 1) {
+			resource_release("vdd1_opp", &ov_dev);
+			flag = 0;
+		}
+	}
+}
+
+static u8 sholes_get_config_flags(void)
+{
+	return 0;
 }
 
 
 struct mt9p012_platform_data sholes_mt9p012_platform_data = {
-#if defined(CONFIG_VIDEO_OLDOMAP3)
-	.power_set      = mt9p012_sensor_power_set,
-	.set_xclk          = mt9p012_set_xclk,
-	.priv_data_set = mt9p012_sensor_set_prv_data,
-#else
 	.power_set       = mt9p012_sensor_power_set,
 	.priv_data_set  = mt9p012_sensor_set_prv_data,
-	.set_xclk           = isp_set_xclk,
+	.lock_cpufreq = sholes_lock_cpufreq,
+	.get_config_flags = sholes_get_config_flags,
 	.csi2_lane_count        = isp_csi2_complexio_lanes_count,
 	.csi2_cfg_vp_out_ctrl = isp_csi2_ctrl_config_vp_out_ctrl,
 	.csi2_ctrl_update       = isp_csi2_ctrl_update,
 	.csi2_cfg_virtual_id    = isp_csi2_ctx_config_virtual_id,
 	.csi2_ctx_update       = isp_csi2_ctx_update,
 	.csi2_calc_phy_cfg0  = isp_csi2_calc_phy_cfg0,
-#endif
 };
 
 #endif /* #ifdef CONFIG_VIDEO_MT9P012 || CONFIG_VIDEO_MT9P012_MODULE */

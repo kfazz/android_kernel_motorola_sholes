@@ -31,11 +31,13 @@ struct mt9p012_platform_data {
 	int (*power_set)(struct device* dev, enum v4l2_power power);
 	u32 (*set_xclk)(u32 xclkfreq);
 	int (*priv_data_set)(void *);
+	u8 (*get_config_flags)(void);
 #else
 	int (*power_set)(struct device*, enum v4l2_power power);
 	int (*ifparm)(struct v4l2_ifparm *p);
 	int (*priv_data_set)(void *);
-	u32 (*set_xclk)(u32 xclk, u8 xclksel);
+	void (*lock_cpufreq)(int lock);
+	u8 (*get_config_flags)(void);
 	int (*cfg_interface_bridge)(u32);
 	int (*csi2_lane_count)(int count);
 	int (*csi2_cfg_vp_out_ctrl)(u8 vp_out_ctrl);

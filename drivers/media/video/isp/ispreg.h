@@ -118,7 +118,7 @@
 
 /* Note: CM_CAM_MCLK_HZ can not be more than 216MHz,
 	reference OMAP36XX ES1.1 TRM */
-#define CM_CAM_MCLK_HZ			432000000
+#define CM_CAM_MCLK_HZ			216000000
 
 #define OMAP3_CM_CLKSEL_CAM		0x48004f40
 
