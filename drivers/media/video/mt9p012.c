@@ -129,8 +129,6 @@
 
 #define MT9P012_LSC_SIZE 102
 
-#define MT9P012_MIRROR_MODE_FLAG 0x1
-
 /**
  * struct mt9p012_reg - mt9p012 register format
  * @length: length of the register
@@ -622,80 +620,6 @@ static struct mt9p012_sensor_settings sensor_settings[] = {
 	}
 };
 
-/* Settings used if mirror mode is needed */
-static struct mt9p012_sensor_settings mirror_sensor_settings[] = {
-
-	/* FRAME_5MP */
-	{
-		.clk = {
-			.pre_pll_div = 9,
-			.pll_mult = 134,
-			.vt_pix_clk_div = 7,
-			.vt_sys_clk_div = 1,
-			.op_pix_clk_div = 10,
-			.op_sys_clk_div = 1,
-		},
-		.frame = {
-			.frame_len_lines = 2056,
-			.line_len_pck_min = 4915,
-			.x_addr_start = 8,
-			.x_addr_end = 2599,
-			.y_addr_start = 8,
-			.y_addr_end = 1951,
-			.x_output_size = 2592,
-			.y_output_size = 1944,
-			.x_odd_inc = 1,
-			.y_odd_inc = 1,
-			.x_bin = 0,
-			.xy_bin = 0,
-			.x_bin_summing = 0,
-			.scale_m = 0,
-			.scale_mode = 0,
-		},
-		.exposure = {
-			.coarse_int_tm = 1700,
-			.fine_int_tm = 882,
-			.fine_correction = 156,
-			.analog_gain = 0x10C0
-		}
-	},
-
-	/* FRAME_1296_30FPS */
-	{
-		.clk = {
-			.pre_pll_div = 12,
-			.pll_mult = 134,
-			.vt_pix_clk_div = 6,
-			.vt_sys_clk_div = 1,
-			.op_pix_clk_div = 10,
-			.op_sys_clk_div = 1,
-		},
-		.frame = {
-			.frame_len_lines = 1063,
-			.line_len_pck_min = 3430,
-			.x_addr_start = 8,
-			.x_addr_end = 2597,
-			.y_addr_start = 8,
-			.y_addr_end = 1949,
-			.x_output_size = 1296,
-			.y_output_size = 972,
-			.x_odd_inc = 3,
-			.y_odd_inc = 3,
-			.x_bin = 0,
-			.xy_bin = 1,
-			.x_bin_summing = VIDEO_BIN_SUMMING,
-			.scale_m = 0,
-			.scale_mode = 0,
-		},
-		.exposure = {
-			.coarse_int_tm = 1000,
-			.fine_int_tm = 1794,
-			.fine_correction = 348,
-			.analog_gain = 0x10C0
-		}
-	}
-};
-
 /**
  * struct vcontrol - Video controls
  * @v4l2_queryctrl: V4L2 VIDIOC_QUERYCTRL ioctl structure
@@ -1096,24 +1020,6 @@ static int mt9p012_write_regs(struct i2c_client *client,
 			return err;
 	}
 	return 0;
-}
-
-/**
- * overwrite_with_mirror_settings - Overwrite mirror mode settings
- *
- * Overwrites a list of MT9P012 sensor settings.
- */
-static void overwrite_with_mirror_settings(void)
-{
-	/* overwrite 5M settings */
-	memcpy(&sensor_settings[MT9P012_FRAME_5MP_10FPS],
-		&mirror_sensor_settings[MT9P012_FRAME_5MP_10FPS],
-		sizeof(struct mt9p012_sensor_settings));
-
-	/* overwrite liveview settings */
-	memcpy(&sensor_settings[MT9P012_FRAME_1296_30FPS],
-		&mirror_sensor_settings[MT9P012_FRAME_1296_30FPS],
-		sizeof(struct mt9p012_sensor_settings));
 }
 
 /**
@@ -2752,9 +2658,6 @@ static int ioctl_s_power(struct v4l2_int_device *s, enum v4l2_power new_power)
 			rval = ioctl_dev_init(s);
 			if (rval)
 				goto err_on;
-		if (sensor->pdata->get_config_flags()
-				& MT9P012_MIRROR_MODE_FLAG)
-			overwrite_with_mirror_settings();
 		}
 		break;
 	case V4L2_POWER_OFF:
@@ -2871,7 +2774,6 @@ static int mt9p012_probe(struct i2c_client *client,
 	sensor->pdata->power_set = pdata->power_set;
 	sensor->pdata->priv_data_set = pdata->priv_data_set;
 	sensor->pdata->lock_cpufreq = pdata->lock_cpufreq;   /* 720p mode */
-	sensor->pdata->get_config_flags = pdata->get_config_flags;
 
 	/* Set sensor default values */
 	sensor->timeperframe.numerator = 1;

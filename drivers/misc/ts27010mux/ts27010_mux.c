@@ -77,8 +77,7 @@
 #define TS0710MUX_MINOR_START 0
 
 /* 2500ms, for BP UART hardware flow control AP UART  */
-#define TS0710MUX_TIME_OUT 2500
-#define TS0710MUX_CLOSE_TIME_OUT 90
+#define TS0710MUX_TIME_OUT 250
 
 #define CRC_VALID 0xcf
 
@@ -148,7 +147,7 @@ static struct ts0710_con ts0710_connection;
 #ifdef DEBUG
 
 static int debug = 0;
-static struct mutex read_lock;
+
 module_param_named(debug_level, debug, int, S_IRUGO | S_IWUSR);
 
 #define ts_debug(level, format, arg...)	do {	\
@@ -1044,14 +1043,14 @@ static int ts0710_close_channel(u8 dlci)
 	}
 
 	d->state = DISCONNECTING;
-	try = 1;
+	try = 3;
 	while (try--) {
 		ts27010_send_disc(ts0710, dlci);
 		mutex_unlock(&d->lock);
 		retval = wait_event_interruptible_timeout(d->close_wait,
 							  d->state !=
 							  DISCONNECTING,
-						TS0710MUX_CLOSE_TIME_OUT);
+							  TS0710MUX_TIME_OUT);
 		mutex_lock(&d->lock);
 
 		if (retval == 0)
@@ -1335,7 +1334,6 @@ void ts27010_mux_recv(struct ts27010_ringbuf *rbuf)
 	int len = 0;
 	u8 fcs = 0;
 
-	mutex_lock(&read_lock);
 	count = ts27010_ringbuf_level(rbuf);
 
 	for (i = 0; i < count; i++) {
@@ -1416,7 +1414,6 @@ void ts27010_mux_recv(struct ts27010_ringbuf *rbuf)
 	}
 
 	ts27010_ringbuf_consume(rbuf, consume_idx+1);
-	mutex_unlock(&read_lock);
 
 }
 
@@ -1453,7 +1450,7 @@ static int __init mux_init(void)
 		pr_err("ts27010mux: error %d registering tty.\n", err);
 		goto err1;
 	}
-	mutex_init(&read_lock);
+
 	pr_info("ts27010 mux registered\n");
 
 	return 0;

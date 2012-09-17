@@ -386,7 +386,10 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 
 	hrtimer_cancel(&alarms[ANDROID_ALARM_RTC_WAKEUP].timer);
 	hrtimer_cancel(&alarms[
-			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK].timer);
+			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP].timer);
+
+	hrtimer_cancel(&alarms[ANDROID_ALARM_RTC].timer);
+	hrtimer_cancel(&alarms[ANDROID_ALARM_ELAPSED_REALTIME].timer);
 
 	tmp_queue = &alarms[ANDROID_ALARM_RTC_WAKEUP];
 	if (tmp_queue->first)
@@ -451,6 +454,9 @@ static int alarm_resume(struct platform_device *pdev)
 	update_timer_locked(&alarms[ANDROID_ALARM_RTC_WAKEUP], false);
 	update_timer_locked(&alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP],
 									false);
+	update_timer_locked(&alarms[ANDROID_ALARM_RTC], false);
+	update_timer_locked(&alarms[ANDROID_ALARM_ELAPSED_REALTIME], false);
+
 	spin_unlock_irqrestore(&alarm_slock, flags);
 
 	return 0;

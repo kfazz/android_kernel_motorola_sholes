@@ -4,7 +4,6 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/poll.h>
-#include <linux/slab.h>
 
 #include "ts27010_mux.h"
 #include "ts27010_ringbuf.h"
@@ -62,7 +61,7 @@ static int ts27010_ldisc_open(struct tty_struct *tty)
 	INIT_WORK(&ts->recv_work, ts27010_ldisc_recv_worker);
 
 	mutex_init(&ts->send_lock);
-	spin_lock_init(&ts->recv_lock);
+	ts->recv_lock = __SPIN_LOCK_UNLOCKED(ts->recv_lock);
 
 	tty->disc_data = ts;
 
@@ -148,18 +147,7 @@ static unsigned int ts27010_ldisc_poll(struct tty_struct *tty,
 				       struct file *file,
 				       poll_table *wait)
 {
-	unsigned int mask = 0;
-
-	poll_wait(file, &tty->read_wait, wait);
-	poll_wait(file, &tty->write_wait, wait);
-	if (tty_hung_up_p(file))
-		mask |= POLLHUP;
-	if (!tty_is_writelocked(tty) && tty_write_room(tty) > 0)
-		mask |= POLLOUT | POLLWRNORM;
-
-	return mask;
-
-
+	return 0;
 }
 
 /*
